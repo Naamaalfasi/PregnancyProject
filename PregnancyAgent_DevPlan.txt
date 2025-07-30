@@ -1,0 +1,71 @@
+
+Pregnancy Agent – Development Plan
+==================================
+
+High-Level Development Stages:
+------------------------------
+1. Infrastructure Setup
+2. Core Modules Development
+3. Medical Document Integration
+4. Smart Conversational Agent
+5. Testing & Validation
+6. Optional Future Expansions
+
+Stage 1: Infrastructure Setup (1 day)
+-------------------------------------
+- Initialize FastAPI project structure
+- Create Dockerfile and docker-compose.yml
+- Setup virtual environment and requirements.txt
+- Integrate MongoDB and ChromaDB using Docker Compose
+- Create base config.py
+- Enable Swagger docs (/docs)
+
+Stage 2: User Profile Management (1–2 days)
+-------------------------------------------
+- Create MongoDB structure for user profiles (user_id, age, pregnancy_week, LMP, etc.)
+- Implement GET /user-profile
+- Implement PATCH /user-profile
+- Use Pydantic for request validation and response models
+
+Stage 3: Medical Document Upload and Processing (2–3 days)
+----------------------------------------------------------
+- Implement POST /medical-documents to accept PDF, type, and date
+- Extract and chunk text from PDF
+- Generate embeddings using Ollama
+- Store chunks in ChromaDB with metadata
+- Store summary and metadata in MongoDB
+
+Stage 4: Conversational Agent (Chat) (2 days)
+---------------------------------------------
+- Implement POST /chat with message and session_id
+- Integrate MemoryManager to store user dialogue history
+- Use RAG with document retrieval and user profile context
+- Generate Hebrew response via LLM
+- Return answer and sources (if applicable)
+
+Stage 5: Proactive Agent Behavior (2 days)
+------------------------------------------
+- Implement POST /agent/plan for proactive suggestions
+- Detect upcoming tests (based on pregnancy week)
+- Generate suggestions for user
+- Save new tasks or reminders to MongoDB
+
+Stage 6: Task & Checkup Management (1 day)
+------------------------------------------
+- Implement GET /tasks to retrieve user's upcoming medical tasks
+- Implement POST /tasks/complete to mark as done
+- Connect ActionPlanner to this task system
+- Store all task events in MongoDB
+
+Stage 7: Testing & Swagger Documentation (0.5 day)
+--------------------------------------------------
+- Ensure full validation with Pydantic on all endpoints
+- Add example requests/responses in Swagger (/docs)
+- Manually test flows: user creation → document upload → reminder → chat
+
+Optional Future Extensions:
+---------------------------
+- Frontend interface (e.g., React or mobile app)
+- WhatsApp/Email reminders via Twilio or SMTP
+- Analytics dashboard for activity tracking
+- Advanced medical chart visualizations
