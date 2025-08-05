@@ -1,7 +1,14 @@
-from fastapi import FastAPI, BackgroundTasks
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks, HTTPException
+from datetime import datetime
+import asyncio
+import logging
 from app.config import settings
-from app.api import user
+from app.api import user, medical, chat, tasks
+from app.database.mongo_client import mongo_client
+from app.database.chroma_client import chroma_client
+from app.agent.user_profile import user_profile_manager
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Pregnancy Agent API",
@@ -9,15 +16,15 @@ app = FastAPI(
     version="0.1.0"
 )
 
+# Include routers
 app.include_router(user.router, prefix="/user-profile", tags=["User Profile"])
+app.include_router(medical.router, prefix="/medical", tags=["Medical Documents"])
+app.include_router(chat.router, prefix="/chat", tags=["Chat Agent"])
+app.include_router(tasks.router, prefix="/tasks", tags=["Tasks"])
 
 @app.get("/")
 def root():
     return {"msg": "Pregnancy Agent API is running"}
-    title="Pregnancy Agent API",
-    description="Backend for proactive pregnancy companion agent",
-    version="0.1.0"
-)
 
 @app.on_event("startup")
 async def startup_event():
@@ -64,16 +71,6 @@ async def schedule_daily_updates():
         except Exception as e:
             logger.error(f"Error in daily pregnancy week update: {e}")
             await asyncio.sleep(3600)  # Wait 1 hour before retrying
-
-# Include routers
-app.include_router(user.router, prefix="/user-profile", tags=["User Profile"])
-app.include_router(medical.router, prefix="/medical", tags=["Medical Documents"])
-app.include_router(chat.router, prefix="/chat", tags=["Chat Agent"])
-app.include_router(tasks.router, prefix="/tasks", tags=["Tasks"])
-
-@app.get("/")
-def root():
-    return {"msg": "Pregnancy Agent API is running"}
 
 @app.get("/health")
 async def health_check():
