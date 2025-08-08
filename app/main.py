@@ -1,98 +1,220 @@
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List, Optional
+import uuid
 from datetime import datetime
-import asyncio
-import logging
+
 from app.config import settings
-from app.api import user, medical, chat, tasks
-from app.database.mongo_client import mongo_client
-from app.database.chroma_client import chroma_client
-from app.agent.user_profile import user_profile_manager
+from app.models import UserProfile, MedicalDocument, Task, ChatRequest, ChatResponse
+from app.database.mongo_client import MongoDBClient
+from app.database.chroma_client import ChromaDBClient
 
-logger = logging.getLogger(__name__)
-
+# Initialize FastAPI app
 app = FastAPI(
     title="Pregnancy Agent API",
-    description="Backend for proactive pregnancy companion agent",
-    version="0.1.0"
+    description="AI-driven pregnancy assistant with RAG and Agent capabilities",
+    version="1.0.0"
 )
 
-# Include routers
-app.include_router(user.router, prefix="/user-profile", tags=["User Profile"])
-app.include_router(medical.router, prefix="/medical", tags=["Medical Documents"])
-app.include_router(chat.router, prefix="/chat", tags=["Chat Agent"])
-app.include_router(tasks.router, prefix="/tasks", tags=["Tasks"])
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/")
-def root():
-    return {"msg": "Pregnancy Agent API is running"}
+# Initialize database clients
+mongo_client = MongoDBClient()
+chroma_client = ChromaDBClient()
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database connections and schedule daily tasks"""
-    try:
-        await mongo_client.connect()
-        await chroma_client.connect()
-        
-        # Schedule daily pregnancy week updates
-        asyncio.create_task(schedule_daily_updates())
-        
-        logger.info("Application started successfully")
-    except Exception as e:
-        logger.error(f"Failed to start application: {e}")
-        raise
+    """Initialize database connections on startup"""
+    await mongo_client.connect()
+    await chroma_client.connect()
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Close database connections on shutdown"""
-    await mongo_client.disconnect()
-    logger.info("Application shutdown complete")
+    await mongo_client.close()
+    await chroma_client.close()
 
-async def schedule_daily_updates():
-    """Schedule daily pregnancy week updates"""
-    while True:
-        try:
-            # Wait until 2 AM
-            now = datetime.now()
-            target_time = now.replace(hour=2, minute=0, second=0, microsecond=0)
-            
-            if now >= target_time:
-                target_time = target_time.replace(day=target_time.day + 1)
-            
-            # Calculate seconds until target time
-            seconds_until_target = (target_time - now).total_seconds()
-            
-            logger.info(f"Scheduling pregnancy week update for {target_time}")
-            await asyncio.sleep(seconds_until_target)
-            
-            # Update pregnancy weeks
-            updated_count = await user_profile_manager.update_all_pregnancy_weeks()
-            logger.info(f"Daily pregnancy week update completed. Updated {updated_count} users.")
-            
-        except Exception as e:
-            logger.error(f"Error in daily pregnancy week update: {e}")
-            await asyncio.sleep(3600)  # Wait 1 hour before retrying
+# Health check endpoint
+@app.get("/")
+async def root():
+    return {"message": "Pregnancy Agent API is running!", "status": "healthy"}
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    mongo_healthy = await mongo_client.health_check()
-    chroma_healthy = await chroma_client.health_check()
+# User Profile Endpoints
+@app.post("/users", response_model=UserProfile)
+async def create_user_profile(profile: UserProfile):
+    """Create a new user profile"""
+    profile.user_id = str(uuid.uuid4())
+    profile.created_at = datetime.utcnow()
+    profile.updated_at = datetime.utcnow()
+    
+    await mongo_client.create_user_profile(profile)
+    return profile
+
+@app.get("/users/{user_id}", response_model=UserProfile)
+async def get_user_profile(user_id: str):
+    """Get user profile by ID"""
+    profile = await mongo_client.get_user_profile(user_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    return profile
+
+@app.put("/users/{user_id}", response_model=UserProfile)
+async def update_user_profile(user_id: str, profile: UserProfile):
+    """Update user profile"""
+    profile.user_id = user_id
+    profile.updated_at = datetime.utcnow()
+    
+    updated_profile = await mongo_client.update_user_profile(user_id, profile)
+    if not updated_profile:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    return updated_profile
+
+# Medical Documents Endpoints
+@app.post("/users/{user_id}/documents")
+async def upload_medical_document(
+    user_id: str,
+    file: UploadFile = File(...),
+    document_type: str = "other"
+):
+    """Upload and process medical document"""
+    # Validate user exists
+    user = await mongo_client.get_user_profile(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    
+    # Create document record
+    document = MedicalDocument(
+        document_id=str(uuid.uuid4()),
+        document_type=document_type,
+        upload_date=datetime.utcnow(),
+        file_name=file.filename,
+        file_size=0,  # Will be updated after processing
+        is_processed=False
+    )
+    
+    # TODO: Process document with RAG pipeline
+    # - Extract text from PDF
+    # - Generate embeddings
+    # - Store in ChromaDB
+    # - Update document with summary
+    
+    # Save document to user profile
+    await mongo_client.add_medical_document(user_id, document)
     
     return {
-        "status": "healthy" if mongo_healthy and chroma_healthy else "unhealthy",
-        "mongodb": "connected" if mongo_healthy else "disconnected",
-        "chromadb": "connected" if chroma_healthy else "disconnected"
+        "message": "Document uploaded successfully",
+        "document_id": document.document_id
     }
 
-@app.post("/admin/update-pregnancy-weeks")
-async def manual_pregnancy_week_update(background_tasks: BackgroundTasks):
-    """Manual trigger for pregnancy week updates"""
-    try:
-        background_tasks.add_task(user_profile_manager.update_all_pregnancy_weeks)
-        return {
-            "message": "Pregnancy weeks update triggered manually",
-            "timestamp": datetime.utcnow()
-        }
-    except Exception as e:
-        logger.error(f"Error in manual pregnancy week update: {e}")
-        raise HTTPException(status_code=500, detail="Failed to trigger update")
+@app.get("/users/{user_id}/documents", response_model=List[MedicalDocument])
+async def get_user_documents(user_id: str):
+    """Get all medical documents for a user"""
+    documents = await mongo_client.get_user_documents(user_id)
+    return documents
+
+# Tasks Endpoints
+@app.post("/users/{user_id}/tasks", response_model=Task)
+async def create_task(user_id: str, task: Task):
+    """Create a new task for user"""
+    task.task_id = str(uuid.uuid4())
+    task.user_id = user_id
+    task.created_at = datetime.utcnow()
+    
+    await mongo_client.create_task(task)
+    return task
+
+@app.get("/users/{user_id}/tasks", response_model=List[Task])
+async def get_user_tasks(user_id: str, completed: Optional[bool] = None):
+    """Get tasks for user with optional completion filter"""
+    tasks = await mongo_client.get_user_tasks(user_id, completed)
+    return tasks
+
+@app.patch("/tasks/{task_id}")
+async def update_task(task_id: str, task_update: dict):
+    """Update task (mark as completed, change priority, etc.)"""
+    updated_task = await mongo_client.update_task(task_id, task_update)
+    if not updated_task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return updated_task
+
+@app.delete("/tasks/{task_id}")
+async def delete_task(task_id: str):
+    """Delete a task"""
+    success = await mongo_client.delete_task(task_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"message": "Task deleted successfully"}
+
+# Chat Endpoints
+@app.post("/chat", response_model=ChatResponse)
+async def chat_with_agent(chat_request: ChatRequest):
+    """Chat with the AI agent using RAG and context"""
+    # TODO: Implement RAG + Agent logic
+    # - Retrieve relevant documents from ChromaDB
+    # - Get user profile and pregnancy context
+    # - Generate response using AI model
+    # - Return response with sources and suggestions
+    
+    # Placeholder response
+    response = ChatResponse(
+        response="שלום! אני כאן כדי לעזור לך במהלך ההריון. איך אני יכול/ה לעזור לך היום?",
+        sources=[],
+        suggestions=["בדיקות רפואיות", "מטלות להכנה", "מעקב הריון"],
+        confidence=0.8
+    )
+    
+    return response
+
+# Emergency Endpoints
+@app.post("/users/{user_id}/emergency")
+async def emergency_alert(user_id: str, emergency_type: str = "general"):
+    """Send emergency alert with user pregnancy context"""
+    user = await mongo_client.get_user_profile(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    
+    # TODO: Implement emergency notification system
+    # - Contact emergency services
+    # - Include pregnancy context
+    # - Send location if available
+    
+    return {
+        "message": "Emergency alert sent successfully",
+        "user_id": user_id,
+        "pregnancy_week": user.pregnancy_week,
+        "emergency_type": emergency_type
+    }
+
+# Pregnancy Timeline Endpoints
+@app.get("/users/{user_id}/timeline")
+async def get_pregnancy_timeline(user_id: str):
+    """Get pregnancy timeline with upcoming checkups and tasks"""
+    user = await mongo_client.get_user_profile(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    
+    # TODO: Generate timeline based on pregnancy week
+    # - Upcoming medical checkups
+    # - Important milestones
+    # - Recommended tasks
+    
+    timeline = {
+        "current_week": user.pregnancy_week,
+        "due_date": user.due_date,
+        "upcoming_checkups": [],
+        "milestones": [],
+        "recommendations": []
+    }
+    
+    return timeline
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

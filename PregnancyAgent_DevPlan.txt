@@ -1,71 +1,196 @@
-
 Pregnancy Agent – Development Plan
-==================================
+Objective
+Develop an AI-driven pregnancy assistant that utilizes Retrieval-Augmented Generation (RAG) for context retrieval from structured and unstructured data, alongside an autonomous Agent capable of planning, decision-making, and task management.
 
-High-Level Development Stages:
-------------------------------
-1. Infrastructure Setup
-2. Core Modules Development
-3. Medical Document Integration
-4. Smart Conversational Agent
-5. Testing & Validation
-6. Optional Future Expansions
+Architecture Responsibilities
+Retrieval-Augmented Generation (RAG)
+RAG is responsible for retrieving and embedding knowledge from user documents and structured data, and integrating it into the conversational context to assist the language model in producing accurate and relevant responses.
 
-Stage 1: Infrastructure Setup (1 day)
--------------------------------------
-- Initialize FastAPI project structure
-- Create Dockerfile and docker-compose.yml
-- Setup virtual environment and requirements.txt
-- Integrate MongoDB and ChromaDB using Docker Compose
-- Create base config.py
-- Enable Swagger docs (/docs)
+Responsibilities:
 
-Stage 2: User Profile Management (1–2 days)
--------------------------------------------
-- Create MongoDB structure for user profiles (user_id, age, pregnancy_week, LMP, etc.)
-- Implement GET /user-profile
-- Implement PATCH /user-profile
-- Use Pydantic for request validation and response models
+Document ingestion via file upload
 
-Stage 3: Medical Document Upload and Processing (2–3 days)
-----------------------------------------------------------
-- Implement POST /medical-documents to accept PDF, type, and date
-- Extract and chunk text from PDF
-- Generate embeddings using Ollama
-- Store chunks in ChromaDB with metadata
-- Store summary and metadata in MongoDB
+Text extraction and chunking from PDFs
 
-Stage 4: Conversational Agent (Chat) (2 days)
----------------------------------------------
-- Implement POST /chat with message and session_id
-- Integrate MemoryManager to store user dialogue history
-- Use RAG with document retrieval and user profile context
-- Generate Hebrew response via LLM
-- Return answer and sources (if applicable)
+Embedding generation using a language model
 
-Stage 5: Proactive Agent Behavior (2 days)
-------------------------------------------
-- Implement POST /agent/plan for proactive suggestions
-- Detect upcoming tests (based on pregnancy week)
-- Generate suggestions for user
-- Save new tasks or reminders to MongoDB
+Storage of vector embeddings in ChromaDB
 
-Stage 6: Task & Checkup Management (1 day)
-------------------------------------------
-- Implement GET /tasks to retrieve user's upcoming medical tasks
-- Implement POST /tasks/complete to mark as done
-- Connect ActionPlanner to this task system
-- Store all task events in MongoDB
+Metadata and document summary storage in MongoDB
 
-Stage 7: Testing & Swagger Documentation (0.5 day)
---------------------------------------------------
-- Ensure full validation with Pydantic on all endpoints
-- Add example requests/responses in Swagger (/docs)
-- Manually test flows: user creation → document upload → reminder → chat
+Retrieval of relevant information from ChromaDB and MongoDB
 
-Optional Future Extensions:
----------------------------
-- Frontend interface (e.g., React or mobile app)
-- WhatsApp/Email reminders via Twilio or SMTP
-- Analytics dashboard for activity tracking
-- Advanced medical chart visualizations
+Augmentation of the language model prompt with retrieved data
+
+Context-aware response generation in conversation
+
+Source citation in responses
+
+Integration with user profile and chat memory data
+
+Endpoints:
+
+POST /medical-documents
+
+GET /documents
+
+Document search and query endpoints (as needed)
+
+POST /chat (in collaboration with Agent logic)
+
+Agent
+The Agent is responsible for decision-making, planning, task execution, and proactive behavior based on user data, pregnancy timelines, and prior interaction history.
+
+Responsibilities:
+
+Processing user input through the chat interface
+
+Reasoning based on dialogue context and profile data
+
+Generating responses in natural language
+
+Managing user-specific tasks and checkups
+
+Creating reminders and scheduling actions
+
+Generating proactive suggestions based on pregnancy progression
+
+Managing interaction memory and behavioral context
+
+Providing recommendations after document processing or profile updates
+
+Long-term memory integration
+
+Endpoints:
+
+POST /chat
+
+GET /tasks
+
+POST /tasks
+
+PATCH /tasks
+
+DELETE /tasks
+
+POST /tasks/complete
+
+POST /agent/plan
+
+Development Stages
+Stage 1: Infrastructure Setup
+Establish FastAPI project structure
+
+Configure Docker and Docker Compose
+
+Integrate MongoDB and ChromaDB containers
+
+Define base configuration and environment settings
+
+Enable interactive API documentation (Swagger)
+
+Stage 2: User Profile Management
+Define MongoDB schema for user profiles
+
+Implement endpoints to create, retrieve, and update profiles
+
+Validate input and output using Pydantic models
+
+Link user data to downstream modules (tasks, planning, retrieval)
+
+Stage 3: Medical Document Processing and RAG Integration
+Accept PDF uploads and related metadata
+
+Extract, chunk, and embed document content
+
+Store embeddings in ChromaDB
+
+Store summaries and document metadata in MongoDB
+
+Enable document retrieval and search capabilities
+
+Stage 4: Conversational Interface
+Implement unified chat endpoint for real-time communication
+
+Integrate memory management for dialogue context
+
+Combine RAG-based retrieval with Agent-based reasoning
+
+Generate responses in Hebrew
+
+Include source citations when applicable
+
+Stage 5: Proactive Agent Planning
+Implement proactive suggestion logic based on pregnancy timeline
+
+Detect upcoming medical requirements
+
+Recommend and store tasks, reminders, or informational content
+
+Utilize planning module to trigger autonomous actions
+
+Establish endpoint for external or scheduled invocation
+
+Stage 6: Task and Checkup Management
+Implement CRUD operations for user tasks
+
+Track upcoming and completed medical checkups
+
+Associate tasks with user profile and pregnancy data
+
+Enable recommendation system integration
+
+Maintain audit trail for all task-related actions
+
+Stage 7: Testing and Documentation
+Implement full validation across all endpoints
+
+Define example requests and responses in Swagger UI
+
+Establish manual test flows for key user interactions
+
+Develop automated tests for API coverage
+
+Document architecture, setup instructions, and usage guidelines in README
+
+Component Responsibilities Overview
+Functionality	RAG	Agent
+Document ingestion	Yes	No
+Embedding generation	Yes	No
+Vector storage (ChromaDB)	Yes	No
+Contextual augmentation	Yes	No
+Chat response generation	Yes	Yes
+Memory management	Yes	Yes
+Decision-making	No	Yes
+Task planning and execution	No	Yes
+Proactive behavior	No	Yes
+Pregnancy timeline tracking	No	Yes
+
+Supporting Infrastructure
+MongoDB for storing user profiles, summaries, tasks, and memory
+
+ChromaDB for vector search and document retrieval
+
+FastAPI framework for serving all endpoints
+
+Docker-based deployment for consistency across environments
+
+Next Priorities
+Implement proactive agent planning logic and endpoint
+
+Finalize Swagger documentation with usage examples
+
+Complete manual and automated testing procedures
+
+Document system design and deployment in README
+
+Evaluate long-term memory support and multi-turn conversation quality
+
+Future Enhancements
+Develop frontend interface for mobile or web use
+
+Integrate communication channels (WhatsApp, Email) for notifications
+
+Build analytics dashboard for user activity and trends
+
+Add visualizations for pregnancy metrics and checkups
