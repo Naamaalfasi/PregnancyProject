@@ -48,11 +48,38 @@ async def root():
 
 # User Profile Endpoints
 @app.post("/users", response_model=UserProfile)
-async def create_user_profile(profile: UserProfile):
+async def create_user_profile(
+    name: str,
+    pregnancy_week: Optional[int] = None,
+    date_of_birth: Optional[str] = None,
+    lmp_date: Optional[str] = None,
+    due_date: Optional[str] = None,
+    height: Optional[float] = None,
+    weight: Optional[float] = None,
+    blood_type: Optional[str] = None,
+    medical_conditions: List[str] = [],
+    allergies: List[str] = [],
+    medications: List[str] = [],
+    emergency_contact: Optional[str] = None
+):
     """Create a new user profile"""
-    profile.user_id = str(uuid.uuid4())
-    profile.created_at = datetime.utcnow()
-    profile.updated_at = datetime.utcnow()
+    profile = UserProfile(
+        user_id=str(uuid.uuid4()),
+        name=name,
+        pregnancy_week=pregnancy_week,
+        date_of_birth=date_of_birth,
+        lmp_date=lmp_date,
+        due_date=due_date,
+        height=height,
+        weight=weight,
+        blood_type=blood_type,
+        medical_conditions=medical_conditions,
+        allergies=allergies,
+        medications=medications,
+        emergency_contact=emergency_contact,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
+    )
     
     await mongo_client.create_user_profile(profile)
     return profile

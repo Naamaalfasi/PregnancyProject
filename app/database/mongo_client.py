@@ -1,7 +1,10 @@
+from pydoc import doc
 import motor.motor_asyncio
 from typing import List, Optional
 from datetime import datetime
 import json
+from bson import json_util
+from fastapi import HTTPException
 
 from app.config import settings
 from app.models import UserProfile, MedicalDocument, Task
@@ -25,9 +28,13 @@ class MongoDBClient:
     async def create_user_profile(self, profile: UserProfile):
         """Create a new user profile"""
         profile_dict = profile.dict()
-        profile_dict["created_at"] = datetime.utcnow()
-        profile_dict["updated_at"] = datetime.utcnow()
         
+        # Convert datetime objects to ISO format strings
+        if profile_dict.get('created_at'):
+            profile_dict['created_at'] = profile_dict['created_at'].isoformat()
+        if profile_dict.get('updated_at'):
+            profile_dict['updated_at'] = profile_dict['updated_at'].isoformat()
+            
         result = await self.db.user_profiles.insert_one(profile_dict)
         return profile
         
@@ -57,11 +64,18 @@ class MongoDBClient:
         """Add medical document to user profile"""
         document_dict = document.dict()
         
+        # Convert datetime to ISO format
+        if document_dict.get('upload_date'):
+            document_dict['upload_date'] = document_dict['upload_date'].isoformat()
+        
         # Add document to user's medical_documents array
-        await self.db.user_profiles.update_one(
+        result = await self.db.user_profiles.update_one(
             {"user_id": user_id},
             {"$push": {"medical_documents": document_dict}}
         )
+        
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="User profile not found or document not added")
         
     async def get_user_documents(self, user_id: str) -> List[MedicalDocument]:
         """Get all medical documents for a user"""

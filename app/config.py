@@ -1,5 +1,5 @@
 import os
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     MONGO_URI: str = os.getenv("MONGO_URI", "mongodb://mongo:27017")

@@ -23,12 +23,12 @@ class MedicalDocument(BaseModel):
 class UserProfile(BaseModel):
     user_id: str
     name: Optional[str] = None
-    date_of_birth: Optional[int] = None
+    date_of_birth: Optional[str] = None  # Changed to str
     pregnancy_week: Optional[int] = Field(None, ge=1, le=42)
-    lmp_date: Optional[date] = None  # Last Menstrual Period
-    due_date: Optional[date] = None
-    height: Optional[float] = None  # in cm
-    weight: Optional[float] = None  # in kg
+    lmp_date: Optional[str] = None  # Changed to str
+    due_date: Optional[str] = None  # Changed to str
+    height: Optional[float] = None
+    weight: Optional[float] = None
     blood_type: Optional[str] = None
     medical_conditions: List[str] = []
     allergies: List[str] = []
@@ -43,3 +43,16 @@ class UserProfile(BaseModel):
             datetime: lambda v: v.isoformat(),
             date: lambda v: v.isoformat()
         }
+
+    @property
+    def lmp_date_as_date(self) -> Optional[date]:
+        """Convert lmp_date string to date object"""
+        return date.fromisoformat(self.lmp_date) if self.lmp_date else None
+
+    @property
+    def due_date_as_date(self) -> Optional[date]:
+        """Convert due_date string to date object"""
+        return date.fromisoformat(self.due_date) if self.due_date else None
+
+    
+
