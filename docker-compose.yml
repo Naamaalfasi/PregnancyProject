@@ -26,8 +26,10 @@ services:
     ports:
       - "8001:8000"
     volumes:
-      - chroma_data:/chroma/index_data
+      - chroma_data:/data
     environment:
+      - CHROMA_PERSIST_DIR=/data
+      - PRESIST_DIR=/data
       - ALLOW_PERSISTENCE=true
       - ALLOW_RESET=false
 
