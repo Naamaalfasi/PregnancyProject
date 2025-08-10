@@ -1,13 +1,14 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime
-
 from app.config import settings
-from app.models import UserProfile, MedicalDocument, Task, ChatRequest, ChatResponse
+from app.models import UserProfile, MedicalDocument, Task, ChatRequest, ChatResponse, DocumentType
 from app.database.mongo_client import MongoDBClient
 from app.database.chroma_client import ChromaDBClient
+from app.utils.pdf_processor import PDFProcessor
+from app.utils.embeddings import EmbeddingGenerator
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -108,7 +109,7 @@ async def update_user_profile(user_id: str, profile: UserProfile):
 async def upload_medical_document(
     user_id: str,
     file: UploadFile = File(...),
-    document_type: str = "other"
+    document_type: DocumentType = DocumentType.OTHER
 ):
     """Upload and process medical document"""
     # Validate user exists
@@ -116,24 +117,52 @@ async def upload_medical_document(
     if not user:
         raise HTTPException(status_code=404, detail="User profile not found")
     
-    # Create document record
+    # Read file content
+    file_content = await file.read()
+    file_size = len(file_content)
+    
+    # Initialize processors
+    pdf_processor = PDFProcessor()
+    embedding_generator = EmbeddingGenerator()
+    
+    # Extract text and process document
+    extracted_text = pdf_processor.extract_text_from_pdf(file_content)
+    chunks = pdf_processor.chunk_text(extracted_text)
+    medical_data = pdf_processor.extract_medical_data(extracted_text)
+    summary = pdf_processor.generate_summary(extracted_text)
+    
+    # Create document record with actual data
     document = MedicalDocument(
         document_id=str(uuid.uuid4()),
         document_type=document_type,
         upload_date=datetime.utcnow(),
         file_name=file.filename,
-        file_size=0,  # Will be updated after processing
-        is_processed=False
+        file_size=file_size,
+        summary=summary,
+        extracted_data=medical_data,
+        is_processed=True
     )
     
-    # TODO: Process document with RAG pipeline
-    # - Extract text from PDF
-    # - Generate embeddings
-    # - Store in ChromaDB
-    # - Update document with summary
-    
-    # Save document to user profile
+    # Store in MongoDB
     await mongo_client.add_medical_document(user_id, document)
+    
+    # Store in ChromaDB for vector search
+    for i, chunk in enumerate(chunks):
+        await chroma_client.add_document_embedding(
+            user_id=user_id,
+            document_id=f"{document.document_id}_chunk_{i}",
+            text=chunk,
+            metadata={
+                "file_name": file.filename,
+                "document_type": document_type.value,
+                "chunk_index": i,
+                "total_chunks": len(chunks),
+                "summary": summary,
+                # Only include simple values from medical_data
+                "test_type": medical_data.get("test_type", ""),
+                "test_date": medical_data.get("test_date", "")
+            }
+        )
     
     return {
         "message": "Document uploaded successfully",

@@ -4,11 +4,13 @@ from typing import List, Dict, Any
 import uuid
 
 from app.config import settings
+from app.utils.embeddings import EmbeddingGenerator
 
 class ChromaDBClient:
     def __init__(self):
         self.client = None
         self.collection = None
+        self.embedding_generator = EmbeddingGenerator()
         
     async def connect(self):
         """Connect to ChromaDB"""
@@ -30,20 +32,17 @@ class ChromaDBClient:
             
     async def add_document_embedding(
         self, 
-        user_id: str,  # ✅ הוספנו user_id!
+        user_id: str,
         document_id: str, 
         text: str, 
         metadata: Dict[str, Any]
     ):
-        """Add document embedding to ChromaDB"""
-        # TODO: Generate embedding using language model
-        # For now, we'll use a placeholder embedding
-        embedding = [0.0] * 384  # Placeholder embedding vector
+        # Generate real embedding
+        embedding = self.embedding_generator.generate_embedding(text)
         
-        # ✅ הוספת user_id לmetadata
         metadata_with_user = {
             **metadata,
-            "user_id": user_id,  # �� זה מבדיל בין משתמשים!
+            "user_id": user_id,
             "document_id": document_id
         }
         
@@ -56,20 +55,19 @@ class ChromaDBClient:
         
     async def search_documents(
         self, 
-        user_id: str,  # ✅ הוספנו user_id!
+        user_id: str,
         query: str, 
         n_results: int = 5
     ) -> List[Dict[str, Any]]:
         """Search for relevant documents - ONLY for specific user"""
-        # TODO: Generate query embedding
-        # For now, we'll use a placeholder embedding
-        query_embedding = [0.0] * 384
+        # Generate real query embedding using our embedding generator
+        query_embedding = self.embedding_generator.generate_embedding(query)
         
-        # ✅ חיפוש רק במסמכים של המשתמש הספציפי
+        # Search in user's documents
         results = self.collection.query(
             query_embeddings=[query_embedding],
             n_results=n_results,
-            where={"user_id": user_id}  # 🔒 פילטר לפי user_id!
+            where={"user_id": user_id}  # Filter by user_id
         )
         
         return results

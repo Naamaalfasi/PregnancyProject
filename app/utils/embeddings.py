@@ -4,29 +4,14 @@ import hashlib
 
 class EmbeddingGenerator:
     def __init__(self):
-        # TODO: Initialize with actual embedding model (e.g., sentence-transformers)
-        self.model = None
+        # TODO: Replace with actual model initialization
+        from sentence_transformers import SentenceTransformer
+        self.model = SentenceTransformer('all-MiniLM-L6-v2')  # or another suitable model
         
     def generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding for text"""
-        # TODO: Replace with actual embedding model
-        # For now, create a deterministic placeholder embedding
-        hash_object = hashlib.md5(text.encode())
-        hash_hex = hash_object.hexdigest()
-        
-        # Convert hash to embedding vector
-        embedding = []
-        for i in range(0, len(hash_hex), 2):
-            if len(embedding) >= 384:  # Standard embedding size
-                break
-            embedding.append(int(hash_hex[i:i+2], 16) / 255.0)
-            
-        # Pad or truncate to 384 dimensions
-        while len(embedding) < 384:
-            embedding.append(0.0)
-        embedding = embedding[:384]
-        
-        return embedding
+        # Replace placeholder with actual embedding generation
+        embedding = self.model.encode(text)
+        return embedding.tolist()
         
     def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings for multiple texts"""

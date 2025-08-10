@@ -36,22 +36,22 @@ class PDFProcessor:
     def extract_medical_data(self, text: str) -> Dict[str, Any]:
         """Extract structured medical data from text"""
         data = {
-            "test_type": None,
-            "test_date": None,
-            "results": {},
+            "test_type": "",  # Empty string instead of None
+            "test_date": "",  # Empty string instead of None
+            "results": {},    # Keep as empty dict for MongoDB
             "normal_ranges": {},
             "abnormal_values": []
         }
         
-        # TODO: Implement more sophisticated medical data extraction
-        # This is a basic implementation - can be enhanced with NLP/ML
-        
         # Look for common medical test patterns
         if "תוצאות בדיקת דם" in text or "blood test" in text.lower():
             data["test_type"] = "blood_test"
-            
-        if "אולטרסאונד" in text or "ultrasound" in text.lower():
+        elif "אולטרסאונד" in text or "ultrasound" in text.lower():
             data["test_type"] = "ultrasound"
+        elif "בדיקת שתן" in text or "urine test" in text.lower():
+            data["test_type"] = "urine_test"
+        elif "בדיקה גנטית" in text or "genetic test" in text.lower():
+            data["test_type"] = "genetic_test"
             
         # Extract dates (basic pattern)
         date_pattern = r'\d{1,2}/\d{1,2}/\d{4}'

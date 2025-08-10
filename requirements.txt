@@ -24,3 +24,4 @@ Pillow
 python-jose[cryptography]
 passlib[bcrypt]
 python-dateutil
+sentence-transformers
