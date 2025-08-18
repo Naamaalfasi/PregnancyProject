@@ -49,39 +49,7 @@ async def root():
 
 # User Profile Endpoints
 @app.post("/users", response_model=UserProfile)
-async def create_user_profile(
-    name: str,
-    pregnancy_week: Optional[int] = None,
-    date_of_birth: Optional[str] = None,
-    lmp_date: Optional[str] = None,
-    due_date: Optional[str] = None,
-    height: Optional[float] = None,
-    weight: Optional[float] = None,
-    blood_type: Optional[str] = None,
-    medical_conditions: List[str] = [],
-    allergies: List[str] = [],
-    medications: List[str] = [],
-    emergency_contact: Optional[str] = None
-):
-    """Create a new user profile"""
-    profile = UserProfile(
-        user_id=str(uuid.uuid4()),
-        name=name,
-        pregnancy_week=pregnancy_week,
-        date_of_birth=date_of_birth,
-        lmp_date=lmp_date,
-        due_date=due_date,
-        height=height,
-        weight=weight,
-        blood_type=blood_type,
-        medical_conditions=medical_conditions,
-        allergies=allergies,
-        medications=medications,
-        emergency_contact=emergency_contact,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
-    )
-    
+async def create_user_profile(profile: UserProfile): 
     await mongo_client.create_user_profile(profile)
     return profile
 
@@ -116,20 +84,23 @@ async def upload_medical_document(
     user = await mongo_client.get_user_profile(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User profile not found")
-    
-    # Read file content
-    file_content = await file.read()
-    file_size = len(file_content)
-    
+
     # Initialize processors
     pdf_processor = PDFProcessor()
     embedding_generator = EmbeddingGenerator()
+    
+
+    # Read file content
+    file_content = await file.read()
+    file_size = len(file_content)
     
     # Extract text and process document
     extracted_text = pdf_processor.extract_text_from_pdf(file_content)
     chunks = pdf_processor.chunk_text(extracted_text)
     medical_data = pdf_processor.extract_medical_data(extracted_text)
-    summary = pdf_processor.generate_summary(extracted_text)
+    
+    # Generate summary using embeddings for better context
+    summary = await generate_summary_with_embeddings(extracted_text, chunks, embedding_generator)
     
     # Create document record with actual data
     document = MedicalDocument(
@@ -158,7 +129,6 @@ async def upload_medical_document(
                 "chunk_index": i,
                 "total_chunks": len(chunks),
                 "summary": summary,
-                # Only include simple values from medical_data
                 "test_type": medical_data.get("test_type", ""),
                 "test_date": medical_data.get("test_date", "")
             }
@@ -166,7 +136,8 @@ async def upload_medical_document(
     
     return {
         "message": "Document uploaded successfully",
-        "document_id": document.document_id
+        "document_id": document.document_id,
+        "summary": summary
     }
 
 @app.get("/users/{user_id}/documents", response_model=List[MedicalDocument])
@@ -270,6 +241,23 @@ async def get_pregnancy_timeline(user_id: str):
     }
     
     return timeline
+
+async def generate_summary_with_embeddings(text: str, chunks: List[str], embedding_generator: EmbeddingGenerator) -> str:
+    """Generate summary using embeddings for better context understanding"""
+    # Create embeddings for chunks to understand document structure
+    chunk_embeddings = embedding_generator.generate_embeddings_batch(chunks)
+    query_embedding = embedding_generator.generate_embedding(text)
+    similar_chunks = embedding_generator.find_similar_documents(query_embedding, chunk_embeddings)
+    
+    # Use first few chunks for summary (avoid overwhelming the model)
+    summary_chunks = [chunks[i] for i in similar_chunks]
+    summary_text = "\n\n".join(summary_chunks)
+    print(summary_text)
+
+    pdf_processor = PDFProcessor()
+    
+    # Generate summary using the focused text
+    return await pdf_processor.generate_summary(summary_text)
 
 if __name__ == "__main__":
     import uvicorn

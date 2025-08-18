@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   app:
@@ -39,6 +38,30 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+      - ./modelfile:/modelfile
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        ollama serve &
+        pid=$$!
+        until ollama list > /dev/null 2>&1; do
+          echo "Waiting for Ollama server..."
+          sleep 1
+        done
+        if ! ollama list | grep -q 'pregnancy-assistant'; then
+          echo 'Creating pregnancy-assistant model...'
+          ollama create pregnancy-assistant -f /modelfile/Modelfile
+        fi
+        wait $$pid
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
 volumes:
   mongo_data:

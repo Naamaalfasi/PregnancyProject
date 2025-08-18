@@ -21,19 +21,19 @@ class MedicalDocument(BaseModel):
     is_processed: bool = False
 
 class UserProfile(BaseModel):
-    user_id: str
-    name: Optional[str] = None
-    date_of_birth: Optional[str] = None  # Changed to str
+    user_id: Optional[str] = "None-String"
+    name: Optional[str] = "None-String"
+    date_of_birth: Optional[str] = "None-String"  # Changed to str
     pregnancy_week: Optional[int] = Field(None, ge=1, le=42)
-    lmp_date: Optional[str] = None  # Changed to str
-    due_date: Optional[str] = None  # Changed to str
-    height: Optional[float] = None
-    weight: Optional[float] = None
-    blood_type: Optional[str] = None
+    lmp_date: Optional[str] = "None-String"  # Changed to str
+    due_date: Optional[str] = "None-String"  # Changed to str
+    height: Optional[float] = 0
+    weight: Optional[float] = 0
+    blood_type: Optional[str] = "None-String"
     medical_conditions: List[str] = []
     allergies: List[str] = []
     medications: List[str] = []
-    emergency_contact: Optional[str] = None
+    emergency_contact: Optional[str] = "None-String"
     medical_documents: List[MedicalDocument] = []
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

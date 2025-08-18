@@ -10,16 +10,12 @@ class EmbeddingGenerator:
         
     def generate_embedding(self, text: str) -> List[float]:
         # Replace placeholder with actual embedding generation
-        embedding = self.model.encode(text)
-        return embedding.tolist()
+        return self.model.encode(text).tolist()
         
     def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
         """Generate embeddings for multiple texts"""
-        embeddings = []
-        for text in texts:
-            embedding = self.generate_embedding(text)
-            embeddings.append(embedding)
-        return embeddings
+        embeddings = self.model.encode(texts)
+        return [embedding.tolist() for embedding in embeddings]
         
     def similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
         """Calculate cosine similarity between two embeddings"""
