@@ -75,9 +75,19 @@ class PDFProcessor:
         Returns a dictionary with different aspects of the summary
         """
         prompt = """
-        Given the following blood test results, summarize any key findings, including abnormal values, possible concerns, and recommendations.
-        
-        {text}
+        Given the following blood test results, summarize it in a structured format.
+        desired output:
+        - Test Type (blood_test, ultrasound, urine_test, genetic_test, etc)
+        - Test Date (YYYY-MM-DD)
+        - Key Findings (if any)
+        - Abnormal Values (if any)
+        - Possible Concerns (if any)
+        - Recommendations (if any)
+        - Immidiete danger (yes/no)
+        - urgent action within 1 week (yes/no)
+        - urgent action regarding pregnancy healthcare (yes/no)
+
+        And the text is: {text}
         """
 
         async with httpx.AsyncClient(timeout=3600.0) as client:
