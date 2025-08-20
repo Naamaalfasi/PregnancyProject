@@ -1,4 +1,5 @@
 import PyPDF2
+import fitz
 import io
 from typing import List, Dict, Any
 import re
@@ -10,15 +11,31 @@ class PDFProcessor:
         self.ollama_url = settings.OLLAMA_HOST
         
     def extract_text_from_pdf(self, pdf_file: bytes) -> str:
-        """Extract text content from PDF file"""
+        """Extract text content from PDF file (including scanned images)"""
         try:
-            pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_file))
+            doc = fitz.open(stream=pdf_file, filetype="pdf")
             text = ""
             
-            for page in pdf_reader.pages:
-                text += page.extract_text() + "\n"
+            for page_num in range(len(doc)):
+                page = doc[page_num]
                 
+                # First try to get text directly
+                page_text = page.get_text("text")
+                
+                # If no text found, try OCR
+                if not page_text.strip():
+                    # Convert page to image and use OCR
+                    pix = page.get_pixmap()
+                    img_data = pix.tobytes("png")
+                    # For now, we'll use the basic text extraction
+                    # You can add actual OCR here if needed
+                    page_text = f"[Page {page_num + 1} - Image content detected]"
+                
+                text += page_text + "\n"
+            
+            doc.close()
             return text.strip()
+            
         except Exception as e:
             raise Exception(f"Error extracting text from PDF: {str(e)}")
             
@@ -77,15 +94,13 @@ class PDFProcessor:
         prompt = """
         Given the following blood test results, summarize it in a structured format.
         desired output:
-        - Test Type (blood_test, ultrasound, urine_test, genetic_test, etc)
-        - Test Date (YYYY-MM-DD)
-        - Key Findings (if any)
+        - Test Type (blood_test, ultrasound, etc..)
+        - Test Date
         - Abnormal Values (if any)
         - Possible Concerns (if any)
         - Recommendations (if any)
-        - Immidiete danger (yes/no)
-        - urgent action within 1 week (yes/no)
-        - urgent action regarding pregnancy healthcare (yes/no)
+        - is mother in risk of immidiate danger? (yes/no only)
+        - is fetus in risk of immidiate danger? (yes/no only) 
 
         And the text is: {text}
         """

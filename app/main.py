@@ -50,8 +50,7 @@ async def root():
 # User Profile Endpoints
 @app.post("/users", response_model=UserProfile)
 async def create_user_profile(profile: UserProfile): 
-    await mongo_client.create_user_profile(profile)
-    return profile
+    return await mongo_client.create_user_profile(profile)
 
 @app.get("/users/{user_id}", response_model=UserProfile)
 async def get_user_profile(user_id: str):

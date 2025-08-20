@@ -8,11 +8,13 @@ from fastapi import HTTPException
 
 from app.config import settings
 from app.models import UserProfile, MedicalDocument, Task
+from app.database.data_processing import PregnancyDataProcessor
 
 class MongoDBClient:
     def __init__(self):
         self.client = None
         self.db = None
+        self._user_ids_cache = set()
         
     async def connect(self):
         """Connect to MongoDB"""
@@ -23,20 +25,44 @@ class MongoDBClient:
         """Close MongoDB connection"""
         if self.client:
             self.client.close()
+    
+    async def _is_user_id_valid(self, user_id: str) -> bool:
+        return user_id not in self._user_ids_cache
             
     # User Profile Methods
     async def create_user_profile(self, profile: UserProfile):
         """Create a new user profile"""
+
+        """user_id: Optional[str] = "None-String"
+        name: Optional[str] = "None-String"
+        date_of_birth: Optional[str] = "DDMMYYYY"  # Changed to str
+        pregnancy_week: Optional[int] = Field(None, ge=1, le=42)
+        lmp_date: Optional[str] = "None-String"  # Changed to str
+        due_date: Optional[str] = "None-String"  # Changed to str
+        height: Optional[float] = 0
+        weight: Optional[float] = 0
+        blood_type: Optional[str] = "None-String"
+        medical_conditions: List[str] = []
+        allergies: List[str] = []
+        medications: List[str] = []
+        medical_documents: List[MedicalDocument] = []
+        created_at: datetime = Field(default_factory=datetime.utcnow)
+        updated_at: datetime = Field(default_factory=datetime.utcnow) """ 
+
         profile_dict = profile.dict()
-        
-        # Convert datetime objects to ISO format strings
-        if profile_dict.get('created_at'):
-            profile_dict['created_at'] = profile_dict['created_at'].isoformat()
-        if profile_dict.get('updated_at'):
-            profile_dict['updated_at'] = profile_dict['updated_at'].isoformat()
+
+        if not await self._is_user_id_valid(profile_dict["user_id"]):
+            raise HTTPException(status_code=400, detail="User ID already exists")
+
+        profile_dict["pregnancy_week"] = PregnancyDataProcessor.calculate_pregnancy_week(profile_dict["lmp_date"])
+        profile_dict["due_date"] = PregnancyDataProcessor.calculate_due_date(profile_dict["lmp_date"])
+        profile_dict["created_at"] = datetime.utcnow()
+        profile_dict["updated_at"] = datetime.utcnow()
+
+        self._user_ids_cache.add(profile_dict["user_id"])
             
         result = await self.db.user_profiles.insert_one(profile_dict)
-        return profile
+        return profile_dict
         
     async def get_user_profile(self, user_id: str) -> Optional[UserProfile]:
         """Get user profile by ID"""

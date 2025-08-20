@@ -17,8 +17,10 @@ langchain-community
 
 # Document processing
 PyPDF2
+PyMuPDF
 python-docx
 Pillow
+
 
 # Utilities
 python-jose[cryptography]

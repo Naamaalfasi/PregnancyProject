@@ -35,8 +35,8 @@ class UserProfile(BaseModel):
     medications: List[str] = []
     emergency_contact: Optional[str] = "None-String"
     medical_documents: List[MedicalDocument] = []
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         json_encoders = {
