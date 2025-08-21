@@ -86,15 +86,47 @@ class MongoDBClient:
         return None
         
     # Medical Documents Methods
-    async def add_medical_document(self, user_id: str, document: MedicalDocument):
-        """Add medical document to user profile"""
+    async def add_medical_document(self, user_id: str, document: MedicalDocument, parsed_medical_data: dict):
+        """Add medical document to user profile and update user profile with new data"""
         document_dict = document.dict()
         
         # Convert datetime to ISO format
         if document_dict.get('upload_date'):
             document_dict['upload_date'] = document_dict['upload_date'].isoformat()
         
-        # Add document to user's medical_documents array
+        # Update user profile with new profile-level data if found and not already set
+        update_fields = {}
+        # 1. Update blood type if not already set and new one found
+        if parsed_medical_data.get('blood_type') and parsed_medical_data['blood_type'] != 'None':
+            # Check if user already has blood type
+            user = await self.get_user_profile(user_id)
+            if user and user.blood_type == "None-String":
+                update_fields['blood_type'] = parsed_medical_data['blood_type']
+                print(f"Updating blood type to {parsed_medical_data['blood_type']} for user {user_id}")
+        
+        # 2. Update height if not already set and new one found
+        if parsed_medical_data.get('height') and parsed_medical_data['height'] is not None:
+            user = await self.get_user_profile(user_id)
+            if user and not user.height:
+                update_fields['height'] = parsed_medical_data['height']
+                print(f"Updating height to {parsed_medical_data['height']} for user {user_id}")
+        
+        # 3. Update weight if not already set and new one found
+        if parsed_medical_data.get('weight') and parsed_medical_data['weight'] is not None:
+            user = await self.get_user_profile(user_id)
+            if user and not user.weight:
+                update_fields['weight'] = parsed_medical_data['weight']
+                print(f"Updating weight to {parsed_medical_data['weight']} for user {user_id}")
+        
+        # Update user profile if we have new profile-level fields
+        if update_fields:
+            update_fields['updated_at'] = datetime.utcnow()
+            await self.db.user_profiles.update_one(
+                {"user_id": user_id},
+                {"$set": update_fields}
+            )
+        
+        # Add document to user's medical_documents array (with all extracted data)
         result = await self.db.user_profiles.update_one(
             {"user_id": user_id},
             {"$push": {"medical_documents": document_dict}}
@@ -150,3 +182,15 @@ class MongoDBClient:
         """Delete a task"""
         result = await self.db.tasks.delete_one({"task_id": task_id})
         return result.deleted_count > 0
+
+    async def _update_user_blood_type(self, user_id: str, blood_type: str):
+        """Update user's blood type in profile"""
+        result = await self.db.user_profiles.update_one(
+            {"user_id": user_id},
+            {"$set": {"blood_type": blood_type}}
+        )
+        
+        if result.modified_count > 0:
+            print(f"Updated blood type to {blood_type} for user {user_id}")
+        else:
+            print(f"Failed to update blood type for user {user_id}")

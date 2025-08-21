@@ -1,7 +1,7 @@
 import PyPDF2
 import fitz
 import io
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import re
 import httpx
 from app.config import settings
@@ -54,36 +54,125 @@ class PDFProcessor:
             start = start + chunk_size - overlap
 
         return chunks
-        
-    def extract_medical_data(self, text: str) -> Dict[str, Any]:
-        """Extract structured medical data from text"""
+
+    def _parse_medical_summary(self, summary_text: str) -> Dict[str, Any]:
+        """
+        Parse the Ollama-generated medical summary into a structured dictionary
+        """
         data = {
             "test_type": "",
             "test_date": "",
-            "results": {},
-            "normal_ranges": {},
-            "abnormal_values": [],
-            "recommendations": [],  # Added field for recommendations
-            "key_findings": []      # Added field for key findings
+            "blood_type": None,
+            "medications": [],
+            "height": None,
+            "weight": None,
         }
         
-        # Look for common medical test patterns
-        if "תוצאות בדיקת דם" in text or "blood test" in text.lower():
-            data["test_type"] = "blood_test"
-        elif "אולטרסאונד" in text or "ultrasound" in text.lower():
-            data["test_type"] = "ultrasound"
-        elif "בדיקת שתן" in text or "urine test" in text.lower():
-            data["test_type"] = "urine_test"
-        elif "בדיקה גנטית" in text or "genetic test" in text.lower():
-            data["test_type"] = "genetic_test"
+        try:
+            # Split by lines and parse each field
+            lines = summary_text.strip().split('\n')
             
-        # Extract dates (basic pattern)
-        date_pattern = r'\d{1,2}/\d{1,2}/\d{4}'
-        dates = re.findall(date_pattern, text)
-        if dates:
-            data["test_date"] = dates[0]
-            
+            for line in lines:
+                line = line.strip()
+                if not line or line.startswith('And the text is:'):
+                    continue
+                
+                # Parse Test Type
+                if line.startswith('- Test Type:'):
+                    test_type = line.replace('- Test Type:', '').strip().strip('()')
+                    if test_type and test_type != 'None':
+                        data["test_type"] = test_type
+                
+                # Parse Test Date
+                elif line.startswith('- Test Date:'):
+                    test_date = line.replace('- Test Date:', '').strip().strip('()')
+                    if test_date and test_date != 'None':
+                        data["test_date"] = test_date
+                
+                # Parse Blood Type
+                elif line.startswith('- Blood type:'):
+                    blood_type = line.replace('- Blood type:', '').strip().strip('()')
+                    if blood_type and blood_type != 'None':
+                        # Validate blood type format
+                        if self._is_valid_blood_type(blood_type):
+                            data["blood_type"] = blood_type
+                
+                # Parse Medications
+                elif line.startswith('- Medications taken or given:'):
+                    meds = line.replace('- Medications taken or given:', '').strip().strip('()')
+                    if meds and meds != 'None' and meds.lower() != 'none':
+                        # Split by commas if multiple medications
+                        if ',' in meds:
+                            data["medications"] = [med.strip() for med in meds.split(',')]
+                        else:
+                            data["medications"] = [meds]
+                
+                # Parse Height
+                elif line.startswith('- Height of mother:'):
+                    height_str = line.replace('- Height of mother:', '').strip().strip('()')
+                    if height_str and height_str != 'None':
+                        # Extract numeric value
+                        height_match = re.search(r'(\d+(?:\.\d+)?)', height_str)
+                        if height_match:
+                            data["height"] = float(height_match.group(1))
+                
+                # Parse Weight
+                elif line.startswith('- Weight of mother:'):
+                    weight_str = line.replace('- Weight of mother:', '').strip().strip('()')
+                    if weight_str and weight_str != 'None':
+                        # Extract numeric value
+                        weight_match = re.search(r'(\d+(?:\.\d+)?)', weight_str)
+                        if weight_match:
+                            data["weight"] = float(weight_match.group(1))
+        
+        except Exception as e:
+            print(f"Error parsing medical summary: {e}")
+            # Return default data structure if parsing fails
+            pass
+        
         return data
+        
+    async def extract_medical_data(self, text: str) -> str:
+        """
+        Extract specific medical data from the text
+        """
+        prompt = """
+        Given the following text, you need to extract specific medical data from it,
+        Response must be according the format below, No free text, and only legal values that are mentioned. 
+        if data not found, return None for that field:
+        - Test Type: [blood_test, ultrasound, urine_test, genetic_test, other]
+        - Test Date: [DDMMYYYY or None]
+        - Blood type: [A+, A-, B+, B-, AB+, AB-, O+, O-, None]
+        - Medications taken or given: [None or list of medications]
+        - Height of mother: [in cm or None]
+        - Weight of mother: [in kg or None]
+
+        And the text is: {text}
+        """
+
+        async with httpx.AsyncClient(timeout=3600.0) as client:
+            response = await client.post(
+                f"{self.ollama_url}/api/generate",
+                json={
+                    "model": "pregnancy-assistant",
+                    "prompt": prompt.format(text=text),
+                    "stream": False
+                }
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                summary = result["response"]
+
+                return summary
+            else:
+                return "Error generating summary"
+
+
+    def _is_valid_blood_type(self, blood_type: str) -> bool:
+        """Validate blood type format"""
+        valid_types = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+        return blood_type in valid_types
         
 
     async def generate_summary(self, text: str) -> str:

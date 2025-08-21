@@ -17,7 +17,6 @@ class MedicalDocument(BaseModel):
     file_name: str
     file_size: int
     summary: Optional[str] = None
-    extracted_data: Optional[dict] = None
     is_processed: bool = False
 
 class UserProfile(BaseModel):

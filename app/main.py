@@ -96,12 +96,13 @@ async def upload_medical_document(
     # Extract text and process document
     extracted_text = pdf_processor.extract_text_from_pdf(file_content)
     chunks = pdf_processor.chunk_text(extracted_text)
-    medical_data = pdf_processor.extract_medical_data(extracted_text)
-    
-    # Generate summary using embeddings for better context
+
+    medical_data = await pdf_processor.extract_medical_data(extracted_text)
     summary = await generate_summary_with_embeddings(extracted_text, chunks, embedding_generator)
+
+    parsed_medical_data = pdf_processor._parse_medical_summary(medical_data)
     
-    # Create document record with actual data
+    # Create document record with extracted data
     document = MedicalDocument(
         document_id=str(uuid.uuid4()),
         document_type=document_type,
@@ -109,12 +110,11 @@ async def upload_medical_document(
         file_name=file.filename,
         file_size=file_size,
         summary=summary,
-        extracted_data=medical_data,
         is_processed=True
     )
     
     # Store in MongoDB
-    await mongo_client.add_medical_document(user_id, document)
+    await mongo_client.add_medical_document(user_id, document, parsed_medical_data)
     
     # Store in ChromaDB for vector search
     for i, chunk in enumerate(chunks):
@@ -128,15 +128,17 @@ async def upload_medical_document(
                 "chunk_index": i,
                 "total_chunks": len(chunks),
                 "summary": summary,
-                "test_type": medical_data.get("test_type", ""),
-                "test_date": medical_data.get("test_date", "")
+                "test_type": parsed_medical_data.get("test_type", ""),
+                "test_date": parsed_medical_data.get("test_date", "")
             }
         )
     
     return {
         "message": "Document uploaded successfully",
         "document_id": document.document_id,
-        "summary": summary
+        "summary": summary,
+        "before_extraction": medical_data,
+        "extracted_medical_data": parsed_medical_data
     }
 
 @app.get("/users/{user_id}/documents", response_model=List[MedicalDocument])
