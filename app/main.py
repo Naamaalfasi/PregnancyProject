@@ -9,6 +9,12 @@ from app.database.mongo_client import MongoDBClient
 from app.database.chroma_client import ChromaDBClient
 from app.utils.pdf_processor import PDFProcessor
 from app.utils.embeddings import EmbeddingGenerator
+from app.agent.medical_processor import MedicalDataProcessor
+from app.database.file_storage import FileStorageService
+from app.database.file_processing import DocumentStatus
+import os
+
+file_storage = FileStorageService()
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -16,6 +22,7 @@ app = FastAPI(
     description="AI-driven pregnancy assistant with RAG and Agent capabilities",
     version="1.0.0"
 )
+
 
 # Add CORS middleware
 app.add_middleware(
@@ -26,9 +33,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Initialize database clients
 mongo_client = MongoDBClient()
 chroma_client = ChromaDBClient()
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -36,21 +45,25 @@ async def startup_event():
     await mongo_client.connect()
     await chroma_client.connect()
 
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Close database connections on shutdown"""
     await mongo_client.close()
     await chroma_client.close()
 
+
 # Health check endpoint
 @app.get("/")
 async def root():
     return {"message": "Pregnancy Agent API is running!", "status": "healthy"}
 
+
 # User Profile Endpoints
 @app.post("/users", response_model=UserProfile)
 async def create_user_profile(profile: UserProfile): 
     return await mongo_client.create_user_profile(profile)
+
 
 @app.get("/users/{user_id}", response_model=UserProfile)
 async def get_user_profile(user_id: str):
@@ -59,6 +72,7 @@ async def get_user_profile(user_id: str):
     if not profile:
         raise HTTPException(status_code=404, detail="User profile not found")
     return profile
+
 
 @app.put("/users/{user_id}", response_model=UserProfile)
 async def update_user_profile(user_id: str, profile: UserProfile):
@@ -70,6 +84,7 @@ async def update_user_profile(user_id: str, profile: UserProfile):
     if not updated_profile:
         raise HTTPException(status_code=404, detail="User profile not found")
     return updated_profile
+
 
 # Medical Documents Endpoints
 @app.post("/users/{user_id}/documents")
@@ -84,38 +99,60 @@ async def upload_medical_document(
     if not user:
         raise HTTPException(status_code=404, detail="User profile not found")
 
-    # Initialize processors
-    pdf_processor = PDFProcessor()
-    embedding_generator = EmbeddingGenerator()
-    
+    file_path = await file_storage.save_uploaded_file(user_id, file)
 
-    # Read file content
-    file_content = await file.read()
-    file_size = len(file_content)
-    
-    # Extract text and process document
-    extracted_text = pdf_processor.extract_text_from_pdf(file_content)
-    chunks = pdf_processor.chunk_text(extracted_text)
+    file_size = os.path.getsize(file_path)
 
-    medical_data = await pdf_processor.extract_medical_data(extracted_text)
-    summary = await generate_summary_with_embeddings(extracted_text, chunks, embedding_generator)
-
-    parsed_medical_data = pdf_processor._parse_medical_summary(medical_data)
-    
-    # Create document record with extracted data
     document = MedicalDocument(
         document_id=str(uuid.uuid4()),
         document_type=document_type,
         upload_date=datetime.utcnow(),
         file_name=file.filename,
+        file_path=file_path,
         file_size=file_size,
-        summary=summary,
-        is_processed=True
+        status=DocumentStatus.UPLOADED,
+        summary= "Not processed yet"
     )
-    
+
     # Store in MongoDB
-    await mongo_client.add_medical_document(user_id, document, parsed_medical_data)
+    await mongo_client.add_medical_document(user_id, document, {})
+
+    return {"message": "Document uploaded successfully",
+            "document_id": document.document_id,
+            "status": document.status,
+            "summary": document.summary,
+            "path": document.file_path
+            }
     
+@app.post("/users/{user_id}/documents/{document_id}/process")
+async def process_document_background(user_id: str, document_id: str):
+    """Process a document in the background"""
+    document = await mongo_client.get_medical_document(user_id, document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if document.status != DocumentStatus.UPLOADED:
+        raise HTTPException(status_code=400, detail="Document is not in uploaded state")
+
+    # Initialize processors
+    await mongo_client.update_document_status(user_id, document_id, DocumentStatus.PROCESSING)
+
+    pdf_processor = PDFProcessor()
+    embedding_generator = EmbeddingGenerator()
+    medical_processor = MedicalDataProcessor()
+
+    # Read file content
+    file_content = file_storage.read_file_as_bytes(document.file_path)
+
+    # Extract text and process document
+    extracted_text = pdf_processor.extract_text_from_pdf(file_content)
+    chunks = pdf_processor.chunk_text(extracted_text)
+    medical_data = await medical_processor.extract_medical_data(extracted_text)
+    summary = await generate_summary_with_embeddings(extracted_text, chunks, embedding_generator)
+    parsed_medical_data = pdf_processor.parse_medical_summary(medical_data)
+
+    await mongo_client.update_document_with_medical_data(user_id, document_id, parsed_medical_data, summary)
+
     # Store in ChromaDB for vector search
     for i, chunk in enumerate(chunks):
         await chroma_client.add_document_embedding(
@@ -123,8 +160,8 @@ async def upload_medical_document(
             document_id=f"{document.document_id}_chunk_{i}",
             text=chunk,
             metadata={
-                "file_name": file.filename,
-                "document_type": document_type.value,
+                "file_name": document.file_name,
+                "document_type": document.document_type.value,
                 "chunk_index": i,
                 "total_chunks": len(chunks),
                 "summary": summary,
@@ -133,19 +170,23 @@ async def upload_medical_document(
             }
         )
     
+    await mongo_client.update_document_status(user_id, document_id, DocumentStatus.COMPLETED)
+    
     return {
-        "message": "Document uploaded successfully",
+        "message": "Document processed successfully",
         "document_id": document.document_id,
         "summary": summary,
         "before_extraction": medical_data,
         "extracted_medical_data": parsed_medical_data
     }
 
+
 @app.get("/users/{user_id}/documents", response_model=List[MedicalDocument])
 async def get_user_documents(user_id: str):
     """Get all medical documents for a user"""
     documents = await mongo_client.get_user_documents(user_id)
     return documents
+
 
 # Tasks Endpoints
 @app.post("/users/{user_id}/tasks", response_model=Task)
@@ -157,6 +198,7 @@ async def create_task(user_id: str, task: Task):
     
     await mongo_client.create_task(task)
     return task
+
 
 @app.get("/users/{user_id}/tasks", response_model=List[Task])
 async def get_user_tasks(user_id: str, completed: Optional[bool] = None):
@@ -172,6 +214,7 @@ async def update_task(task_id: str, task_update: dict):
         raise HTTPException(status_code=404, detail="Task not found")
     return updated_task
 
+
 @app.delete("/tasks/{task_id}")
 async def delete_task(task_id: str):
     """Delete a task"""
@@ -179,6 +222,36 @@ async def delete_task(task_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Task not found")
     return {"message": "Task deleted successfully"}
+
+@app.delete("/users/{user_id}/documents/{document_id}")
+async def delete_document(user_id: str, document_id: str):
+    """Delete a medical document and its associated file"""
+    # Get user profile to find the document
+    user = await mongo_client.get_user_profile(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    
+    # Find the document to delete
+    document_to_delete = None
+    for doc in user.medical_documents:
+        if doc.document_id == document_id:
+            document_to_delete = doc
+            break
+    
+    if not document_to_delete:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Delete the file from file system
+    file_deleted = file_storage.delete_file(document_to_delete.file_path)
+    
+    # Remove document from user profile
+    document_removed = await mongo_client.remove_medical_document(user_id, document_id)
+    
+    if file_deleted and document_removed:
+        return {"message": "Document deleted successfully"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to delete document completely")
+
 
 # Chat Endpoints
 @app.post("/chat", response_model=ChatResponse)
@@ -200,6 +273,7 @@ async def chat_with_agent(chat_request: ChatRequest):
     
     return response
 
+
 # Emergency Endpoints
 @app.post("/users/{user_id}/emergency")
 async def emergency_alert(user_id: str, emergency_type: str = "general"):
@@ -219,6 +293,7 @@ async def emergency_alert(user_id: str, emergency_type: str = "general"):
         "pregnancy_week": user.pregnancy_week,
         "emergency_type": emergency_type
     }
+
 
 # Pregnancy Timeline Endpoints
 @app.get("/users/{user_id}/timeline")
@@ -247,18 +322,18 @@ async def generate_summary_with_embeddings(text: str, chunks: List[str], embeddi
     """Generate summary using embeddings for better context understanding"""
     # Create embeddings for chunks to understand document structure
     chunk_embeddings = embedding_generator.generate_embeddings_batch(chunks)
-    query_embedding = embedding_generator.generate_embedding(text)
-    similar_chunks = embedding_generator.find_similar_documents(query_embedding, chunk_embeddings)
+    text_embedding = embedding_generator.generate_embedding(text)
+    similar_chunks = embedding_generator.find_similar_documents(text_embedding, chunk_embeddings)
     
     # Use first few chunks for summary (avoid overwhelming the model)
     summary_chunks = [chunks[i] for i in similar_chunks]
     summary_text = "\n\n".join(summary_chunks)
     print(summary_text)
 
-    pdf_processor = PDFProcessor()
+    medical_processor = MedicalDataProcessor()
     
     # Generate summary using the focused text
-    return await pdf_processor.generate_summary(summary_text)
+    return await medical_processor.generate_summary(summary_text)
 
 if __name__ == "__main__":
     import uvicorn
