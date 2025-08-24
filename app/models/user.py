@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, date
+from app.database.file_processing import DocumentStatus
 from enum import Enum
 
 class DocumentType(str, Enum):
@@ -11,13 +12,14 @@ class DocumentType(str, Enum):
     OTHER = "other"
 
 class MedicalDocument(BaseModel):
-    document_id: str
-    document_type: DocumentType
-    upload_date: datetime
-    file_name: str
-    file_size: int
-    summary: Optional[str] = None
-    is_processed: bool = False
+    document_id: Optional[str] = "None-String"
+    document_type: Optional[DocumentType] = "None-String"
+    upload_date: Optional[datetime] = "None-String"
+    file_name: Optional[str] = "None-String"
+    file_path: Optional[str] = "None-String"
+    file_size: Optional[int] = 0
+    status: Optional[DocumentStatus] = "None-String"
+    summary: Optional[str] = "Not processed yet"
 
 class UserProfile(BaseModel):
     user_id: Optional[str] = "None-String"
@@ -32,7 +34,6 @@ class UserProfile(BaseModel):
     medical_conditions: List[str] = []
     allergies: List[str] = []
     medications: List[str] = []
-    emergency_contact: Optional[str] = "None-String"
     medical_documents: List[MedicalDocument] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

@@ -3,12 +3,12 @@ import fitz
 import io
 from typing import List, Dict, Any, Optional
 import re
-import httpx
 from app.config import settings
+from app.agent.medical_processor import MedicalDataProcessor
 
 class PDFProcessor:
     def __init__(self):
-        self.ollama_url = settings.OLLAMA_HOST
+        pass
         
     def extract_text_from_pdf(self, pdf_file: bytes) -> str:
         """Extract text content from PDF file (including scanned images)"""
@@ -55,7 +55,7 @@ class PDFProcessor:
 
         return chunks
 
-    def _parse_medical_summary(self, summary_text: str) -> Dict[str, Any]:
+    def parse_medical_summary(self, summary_text: str) -> Dict[str, Any]:
         """
         Parse the Ollama-generated medical summary into a structured dictionary
         """
@@ -64,6 +64,7 @@ class PDFProcessor:
             "test_date": "",
             "blood_type": None,
             "medications": [],
+            "allergies": [],
             "height": None,
             "weight": None,
         }
@@ -107,6 +108,12 @@ class PDFProcessor:
                         else:
                             data["medications"] = [meds]
                 
+                # Parse Allergies
+                elif line.startswith('- Allergies:'):
+                    allergies = line.replace('- Allergies:', '').strip().strip('()')
+                    if allergies and allergies != 'None' and allergies.lower() != 'none':
+                        data["allergies"] = [allergy.strip() for allergy in allergies.split(',')]
+                
                 # Parse Height
                 elif line.startswith('- Height of mother:'):
                     height_str = line.replace('- Height of mother:', '').strip().strip('()')
@@ -132,41 +139,7 @@ class PDFProcessor:
         
         return data
         
-    async def extract_medical_data(self, text: str) -> str:
-        """
-        Extract specific medical data from the text
-        """
-        prompt = """
-        Given the following text, you need to extract specific medical data from it,
-        Response must be according the format below, No free text, and only legal values that are mentioned. 
-        if data not found, return None for that field:
-        - Test Type: [blood_test, ultrasound, urine_test, genetic_test, other]
-        - Test Date: [DDMMYYYY or None]
-        - Blood type: [A+, A-, B+, B-, AB+, AB-, O+, O-, None]
-        - Medications taken or given: [None or list of medications]
-        - Height of mother: [in cm or None]
-        - Weight of mother: [in kg or None]
 
-        And the text is: {text}
-        """
-
-        async with httpx.AsyncClient(timeout=3600.0) as client:
-            response = await client.post(
-                f"{self.ollama_url}/api/generate",
-                json={
-                    "model": "pregnancy-assistant",
-                    "prompt": prompt.format(text=text),
-                    "stream": False
-                }
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                summary = result["response"]
-
-                return summary
-            else:
-                return "Error generating summary"
 
 
     def _is_valid_blood_type(self, blood_type: str) -> bool:
@@ -174,40 +147,3 @@ class PDFProcessor:
         valid_types = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
         return blood_type in valid_types
         
-
-    async def generate_summary(self, text: str) -> str:
-        """
-        Generate a comprehensive summary of the medical document using Ollama
-        Returns a dictionary with different aspects of the summary
-        """
-        prompt = """
-        Given the following blood test results, summarize it in a structured format.
-        desired output:
-        - Test Type (blood_test, ultrasound, etc..)
-        - Test Date
-        - Abnormal Values (if any)
-        - Possible Concerns (if any)
-        - Recommendations (if any)
-        - is mother in risk of immidiate danger? (yes/no only)
-        - is fetus in risk of immidiate danger? (yes/no only) 
-
-        And the text is: {text}
-        """
-
-        async with httpx.AsyncClient(timeout=3600.0) as client:
-            response = await client.post(
-                f"{self.ollama_url}/api/generate",
-                json={
-                    "model": "pregnancy-assistant",
-                    "prompt": prompt.format(text=text),
-                    "stream": False
-                }
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                summary = result["response"]
-
-                return summary
-            else:
-                return "Error generating summary"

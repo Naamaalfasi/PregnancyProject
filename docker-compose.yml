@@ -4,6 +4,8 @@ services:
     build: .
     ports:
       - "8000:8000"
+    volumes:
+      - ./Uploads:/app/Uploads
     environment:
       - MONGO_URI=mongodb://mongo:27017
       - CHROMA_HOST=http://chroma:8000
