@@ -75,6 +75,7 @@ class MongoDBClient:
             return profile
         return None
     
+    
     async def update_user_blood_type(self, user_id: str, blood_type: str):
         """Update user's blood type in profile"""
         result = await self.db.user_profiles.update_one(
@@ -104,6 +105,7 @@ class MongoDBClient:
         )
         return result.modified_count > 0
     
+
     async def update_document_summary(self, user_id: str, document_id: str, summary: str):
         """Update document summary after processing"""
         result = await self.db.user_profiles.update_one(
@@ -112,6 +114,7 @@ class MongoDBClient:
         )
         return result.modified_count > 0
     
+
     async def get_medical_document(self, user_id: str, document_id: str) -> Optional[MedicalDocument]:
         """Get medical document by user ID and document ID"""
         user = await self.get_user_profile(user_id)
@@ -165,7 +168,6 @@ class MongoDBClient:
     async def add_medical_document(self, user_id: str, document: MedicalDocument, parsed_medical_data: dict):
         """Add medical document to user profile and update user profile with new data"""
         document_dict = document.dict()
-        
         # Convert datetime to ISO format
         if document_dict.get('upload_date'):
             document_dict['upload_date'] = document_dict['upload_date'].isoformat()
@@ -190,5 +192,4 @@ class MongoDBClient:
         await self.update_user_profile_with_medical_data(user_id, parsed_medical_data)
         await self.update_document_summary(user_id, document_id, summary)
         return True
-
 

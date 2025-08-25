@@ -93,6 +93,7 @@ async def upload_medical_document(
     file: UploadFile = File(...),
     document_type: DocumentType = DocumentType.OTHER
 ):
+
     """Upload and process medical document"""
     # Validate user exists
     user = await mongo_client.get_user_profile(user_id)
@@ -101,15 +102,13 @@ async def upload_medical_document(
 
     file_path = await file_storage.save_uploaded_file(user_id, file)
 
-    file_size = os.path.getsize(file_path)
-
     document = MedicalDocument(
         document_id=str(uuid.uuid4()),
         document_type=document_type,
         upload_date=datetime.utcnow(),
         file_name=file.filename,
         file_path=file_path,
-        file_size=file_size,
+        file_size=os.path.getsize(file_path),
         status=DocumentStatus.UPLOADED,
         summary= "Not processed yet"
     )
@@ -272,27 +271,6 @@ async def chat_with_agent(chat_request: ChatRequest):
     )
     
     return response
-
-
-# Emergency Endpoints
-@app.post("/users/{user_id}/emergency")
-async def emergency_alert(user_id: str, emergency_type: str = "general"):
-    """Send emergency alert with user pregnancy context"""
-    user = await mongo_client.get_user_profile(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User profile not found")
-    
-    # TODO: Implement emergency notification system
-    # - Contact emergency services
-    # - Include pregnancy context
-    # - Send location if available
-    
-    return {
-        "message": "Emergency alert sent successfully",
-        "user_id": user_id,
-        "pregnancy_week": user.pregnancy_week,
-        "emergency_type": emergency_type
-    }
 
 
 # Pregnancy Timeline Endpoints
