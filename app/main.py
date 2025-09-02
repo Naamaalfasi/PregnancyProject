@@ -9,6 +9,8 @@ from app.database.mongo_client import MongoDBClient
 from app.database.chroma_client import ChromaDBClient
 from app.utils.pdf_processor import PDFProcessor
 from app.utils.embeddings import EmbeddingGenerator
+import ollama
+from pydantic import BaseModel
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -180,25 +182,44 @@ async def delete_task(task_id: str):
         raise HTTPException(status_code=404, detail="Task not found")
     return {"message": "Task deleted successfully"}
 
-# Chat Endpoints
-@app.post("/chat", response_model=ChatResponse)
-async def chat_with_agent(chat_request: ChatRequest):
-    """Chat with the AI agent using RAG and context"""
-    # TODO: Implement RAG + Agent logic
-    # - Retrieve relevant documents from ChromaDB
-    # - Get user profile and pregnancy context
-    # - Generate response using AI model
-    # - Return response with sources and suggestions
-    
-    # Placeholder response
-    response = ChatResponse(
-        response="שלום! אני כאן כדי לעזור לך במהלך ההריון. איך אני יכול/ה לעזור לך היום?",
-        sources=[],
-        suggestions=["בדיקות רפואיות", "מטלות להכנה", "מעקב הריון"],
-        confidence=0.8
-    )
-    
-    return response
+
+CHAT_CONTEXTS = {}
+
+@app.post("/chat/test")
+async def test_chat(user_id: str, message: str):
+    session_id = user_id or "default"
+    context = CHAT_CONTEXTS.get(session_id, "")
+
+    user = await mongo_client.get_user_profile(user_id)
+    prompt_profile = user.model_dump_json(exclude_none=True)
+
+    prompt = f"""
+Answer the question below.
+
+USER PROFILE: {prompt_profile}
+
+HERE is the conversation history: {context}
+
+Question: {message}
+
+IMPORTANT: 
+- Use the UserProfile ONLY to personalize the answer.
+- Consider the user's pregnancy week, medical conditions, and allergies
+- Provide safe, evidence-based pregnancy advice
+- If medical concerns arise, suggest consulting a healthcare provider
+- Be supportive and informative
+- If the private context is missing or not relevant, answer from your general medical knowledge.
+- Prioritize safety; avoid diagnoses; suggest consulting a healthcare provider when appropriate.
+
+Answer:
+""".strip()
+
+    resp = ollama.generate(model="pregnancy-assistant", prompt=prompt)
+    answer = resp.get("response", "")
+
+    context += f"\nUser: {message}\nAI: {answer}"
+    CHAT_CONTEXTS[session_id] = context
+    return {"response": answer}
 
 # Emergency Endpoints
 @app.post("/users/{user_id}/emergency")
