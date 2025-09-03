@@ -14,8 +14,11 @@ from app.database.file_storage import FileStorageService
 from app.database.file_processing import DocumentStatus
 import os
 from app.models.tasks import TaskType, TaskPriority, TaskSource, TaskReason, TaskCreate
+from pydantic import BaseModel
+import google.generativeai as genai
 
 file_storage = FileStorageService()
+
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -272,25 +275,57 @@ async def delete_document(user_id: str, document_id: str):
         raise HTTPException(status_code=500, detail="Failed to delete document completely")
 
 
-# Chat Endpoints
-@app.post("/chat", response_model=ChatResponse)
-async def chat_with_agent(chat_request: ChatRequest):
-    """Chat with the AI agent using RAG and context"""
-    # TODO: Implement RAG + Agent logic
-    # - Retrieve relevant documents from ChromaDB
-    # - Get user profile and pregnancy context
-    # - Generate response using AI model
-    # - Return response with sources and suggestions
-    
-    # Placeholder response
-    response = ChatResponse(
-        response="שלום! אני כאן כדי לעזור לך במהלך ההריון. איך אני יכול/ה לעזור לך היום?",
-        sources=[],
-        suggestions=["בדיקות רפואיות", "מטלות להכנה", "מעקב הריון"],
-        confidence=0.8
-    )
-    
-    return response
+
+CHAT_CONTEXTS = {}
+
+genai.configure(api_key=settings.GOOGLE_API_KEY)
+_gemini = genai.GenerativeModel(settings.GEMINI_MODEL)
+
+@app.post("/chat/test")
+async def test_chat(user_id: str, message: str):
+    # Fetch the user profile from DB using user_id
+    user = await mongo_client.get_user_profile(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User profile not found")
+
+    session_id = user_id or "default"
+    context = CHAT_CONTEXTS.get(session_id, "")
+    prompt_profile = user.model_dump_json(exclude_none=True)
+
+    prompt = f"""
+Answer the question below.
+
+USER PROFILE: {prompt_profile}
+
+HERE is the conversation history: {context}
+
+Question: {message}
+
+IMPORTANT:
+- Use the UserProfile ONLY to personalize the answer.
+- Consider the user's pregnancy week, medical conditions, and allergies
+- Provide safe, evidence-based pregnancy advice
+- If medical concerns arise, suggest consulting a healthcare provider
+- Be supportive and informative
+- If the private context is missing or not relevant, answer from your general medical knowledge.
+- Prioritize safety; avoid diagnoses; suggest consulting a healthcare provider when appropriate.
+
+Answer:
+""".strip()
+
+    try:
+        resp = _gemini.generate_content(prompt)
+        answer = resp.text if hasattr(resp, "text") else str(resp)
+    except Exception as e:
+        # Handle quota errors gracefully
+        err_msg = str(e)
+        if "429" in err_msg or "ResourceExhausted" in err_msg:
+            raise HTTPException(status_code=429, detail="Gemini quota exceeded. Please try again later or switch to a lower-cost model.")
+        raise HTTPException(status_code=500, detail="Gemini error: " + err_msg)
+
+    context += f"\nUser: {message}\nAI: {answer}"
+    CHAT_CONTEXTS[session_id] = context
+    return {"response": answer}
 
 
 # Pregnancy Timeline Endpoints
