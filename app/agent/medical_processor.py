@@ -3,13 +3,15 @@ Medical Data Processing Agent
 This file contains methods for extracting medical data and generating summaries using AI models.
 """
 
-import httpx
-from typing import Dict, Any
+import google.generativeai as genai
+from typing import Any, Dict
 from app.config import settings
+
 
 class MedicalDataProcessor:
     def __init__(self):
-        self.ollama_url = settings.OLLAMA_HOST
+        genai.configure(api_key=settings.GOOGLE_API_KEY)
+        self._gemini = genai.GenerativeModel(settings.GEMINI_MODEL)
         
     async def extract_medical_data(self, text: str) -> str:
         """
@@ -29,28 +31,17 @@ class MedicalDataProcessor:
 
         And the text is: {text}
         """
-
-        async with httpx.AsyncClient(timeout=3600.0) as client:
-            response = await client.post(
-                f"{self.ollama_url}/api/generate",
-                json={
-                    "model": "pregnancy-assistant",
-                    "prompt": prompt.format(text=text),
-                    "stream": False
-                }
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                summary = result["response"]
-
-                return summary
-            else:
-                return "Error generating summary"
+        try:
+            resp = self._gemini.generate_content(prompt.format(text=text))
+            return resp.text if hasattr(resp, "text") else str(resp)
+        except Exception as e:
+            if "429" in str(e) or "ResourceExhausted" in str(e):
+                return "Quota exceeded. Please try again later."
+            raise
 
     async def generate_summary(self, text: str) -> str:
         """
-        Generate a comprehensive summary of the medical document using Ollama
+        Generate a comprehensive summary of the medical document using Gemini
         Returns a dictionary with different aspects of the summary
         """
         prompt = """
@@ -66,21 +57,10 @@ class MedicalDataProcessor:
 
         And the text is: {text}
         """
-
-        async with httpx.AsyncClient(timeout=3600.0) as client:
-            response = await client.post(
-                f"{self.ollama_url}/api/generate",
-                json={
-                    "model": "pregnancy-assistant",
-                    "prompt": prompt.format(text=text),
-                    "stream": False
-                }
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                summary = result["response"]
-
-                return summary
-            else:
-                return "Error generating summary"
+        try:
+            resp = self._gemini.generate_content(prompt.format(text=text))
+            return resp.text if hasattr(resp, "text") else str(resp)
+        except Exception as e:
+            if "429" in str(e) or "ResourceExhausted" in str(e):
+                return "Quota exceeded. Please try again later."
+            raise

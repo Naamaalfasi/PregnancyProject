@@ -57,7 +57,7 @@ class PDFProcessor:
 
     def parse_medical_summary(self, summary_text: str) -> Dict[str, Any]:
         """
-        Parse the Ollama-generated medical summary into a structured dictionary
+        Parse the model-generated medical summary into a structured dictionary
         """
         data = {
             "test_type": "",

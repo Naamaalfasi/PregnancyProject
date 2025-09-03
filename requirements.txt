@@ -11,10 +11,9 @@ chromadb
 pymongo
 
 # AI and ML
-ollama
+google-generativeai
 langchain
 langchain-community
-langchain-ollama
 
 # Document processing
 PyPDF2

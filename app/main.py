@@ -13,8 +13,8 @@ from app.agent.medical_processor import MedicalDataProcessor
 from app.database.file_storage import FileStorageService
 from app.database.file_processing import DocumentStatus
 import os
-import ollama
 from pydantic import BaseModel
+import google.generativeai as genai
 
 file_storage = FileStorageService()
 
@@ -258,12 +258,18 @@ async def delete_document(user_id: str, document_id: str):
 
 CHAT_CONTEXTS = {}
 
+genai.configure(api_key=settings.GOOGLE_API_KEY)
+_gemini = genai.GenerativeModel(settings.GEMINI_MODEL)
+
 @app.post("/chat/test")
 async def test_chat(user_id: str, message: str):
+    # Fetch the user profile from DB using user_id
+    user = await mongo_client.get_user_profile(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User profile not found")
+
     session_id = user_id or "default"
     context = CHAT_CONTEXTS.get(session_id, "")
-
-    user = await mongo_client.get_user_profile(user_id)
     prompt_profile = user.model_dump_json(exclude_none=True)
 
     prompt = f"""
@@ -275,7 +281,7 @@ HERE is the conversation history: {context}
 
 Question: {message}
 
-IMPORTANT: 
+IMPORTANT:
 - Use the UserProfile ONLY to personalize the answer.
 - Consider the user's pregnancy week, medical conditions, and allergies
 - Provide safe, evidence-based pregnancy advice
@@ -287,8 +293,15 @@ IMPORTANT:
 Answer:
 """.strip()
 
-    resp = ollama.generate(model="pregnancy-assistant", prompt=prompt)
-    answer = resp.get("response", "")
+    try:
+        resp = _gemini.generate_content(prompt)
+        answer = resp.text if hasattr(resp, "text") else str(resp)
+    except Exception as e:
+        # Handle quota errors gracefully
+        err_msg = str(e)
+        if "429" in err_msg or "ResourceExhausted" in err_msg:
+            raise HTTPException(status_code=429, detail="Gemini quota exceeded. Please try again later or switch to a lower-cost model.")
+        raise HTTPException(status_code=500, detail="Gemini error: " + err_msg)
 
     context += f"\nUser: {message}\nAI: {answer}"
     CHAT_CONTEXTS[session_id] = context

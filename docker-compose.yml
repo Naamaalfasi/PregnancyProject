@@ -9,11 +9,11 @@ services:
     environment:
       - MONGO_URI=mongodb://mongo:27017
       - CHROMA_HOST=http://chroma:8000
-      - OLLAMA_HOST=http://ollama:11434
+      - GOOGLE_API_KEY=AIzaSyADFkHbHJCNg1du_RaVU5A-UmHnIKf3ZmU
     depends_on:
       - mongo
       - chroma
-      - ollama
+
 
   mongo:
     image: mongo:7.0
@@ -34,38 +34,7 @@ services:
       - ALLOW_PERSISTENCE=true
       - ALLOW_RESET=false
 
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-      - ./modelfile:/modelfile
-    entrypoint:
-      - sh
-      - -c
-      - |
-        set -e
-        ollama serve &
-        pid=$$!
-        until ollama list > /dev/null 2>&1; do
-          echo "Waiting for Ollama server..."
-          sleep 1
-        done
-        if ! ollama list | grep -q 'pregnancy-assistant'; then
-          echo 'Creating pregnancy-assistant model...'
-          ollama create pregnancy-assistant -f /modelfile/Modelfile
-        fi
-        wait $$pid
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
 
 volumes:
   mongo_data:
   chroma_data:
-  ollama_data:
