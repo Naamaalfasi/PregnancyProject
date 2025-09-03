@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, APIRouter, Body
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional, Dict, Any
 import uuid
@@ -13,6 +13,7 @@ from app.agent.medical_processor import MedicalDataProcessor
 from app.database.file_storage import FileStorageService
 from app.database.file_processing import DocumentStatus
 import os
+from app.models.tasks import TaskType, TaskPriority, TaskSource, TaskReason, TaskCreate
 
 file_storage = FileStorageService()
 
@@ -188,26 +189,45 @@ async def get_user_documents(user_id: str):
 
 
 # Tasks Endpoints
+# 1. יצירת מטלה חדשה
 @app.post("/users/{user_id}/tasks", response_model=Task)
-async def create_task(user_id: str, task: Task):
-    """Create a new task for user"""
-    task.task_id = str(uuid.uuid4())
-    task.user_id = user_id
-    task.created_at = datetime.utcnow()
-    
+async def create_task_endpoint(user_id: str, task_data: TaskCreate):
+    """
+    Create Task
+    If a similar task already exists, return an error
+    """
+    tasks: List[Task] = await mongo_client.get_user_tasks(user_id)
+    for t in tasks:
+        if (
+            t.title == task_data.title and
+            t.task_type == task_data.task_type and
+            t.pregnancy_week == task_data.pregnancy_week
+        ):
+            raise HTTPException(status_code=409, detail="Task already exists for this user in this week")
+    # יצירת מטלה חדשה
+    task = Task(
+        task_id=str(uuid.uuid4()),
+        user_id=user_id,
+        title=task_data.title,
+        description=task_data.description,
+        task_type=task_data.task_type,
+        priority=task_data.priority,
+        pregnancy_week=task_data.pregnancy_week,
+        due_date=task_data.due_date,
+        source=task_data.source,
+        reason=task_data.reason,
+        related_links=task_data.related_links,
+        # שדות נוספים כמו created_at, completed וכו' יתווספו אוטומטית ע"י המודל
+    )
     await mongo_client.create_task(task)
     return task
 
-
-@app.get("/users/{user_id}/tasks", response_model=List[Task])
-async def get_user_tasks(user_id: str, completed: Optional[bool] = None):
-    """Get tasks for user with optional completion filter"""
-    tasks = await mongo_client.get_user_tasks(user_id, completed)
-    return tasks
-
-@app.patch("/tasks/{task_id}")
-async def update_task(task_id: str, task_update: dict):
-    """Update task (mark as completed, change priority, etc.)"""
+# 2. עדכון מטלה קיימת
+@app.patch("/tasks/{task_id}", response_model=Task)
+async def update_task_endpoint(task_id: str, task_update: dict = Body(...)):
+    """
+    Update a Task
+    """
     updated_task = await mongo_client.update_task(task_id, task_update)
     if not updated_task:
         raise HTTPException(status_code=404, detail="Task not found")
