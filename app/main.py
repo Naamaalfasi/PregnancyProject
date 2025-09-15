@@ -13,9 +13,20 @@ from app.agent.medical_processor import MedicalDataProcessor
 from app.database.file_storage import FileStorageService
 from app.database.file_processing import DocumentStatus
 import os
-from app.models.tasks import TaskType, TaskPriority, TaskSource, TaskReason, TaskCreate
+from app.models.tasks import TaskCreate, TaskUpdate
 from pydantic import BaseModel
 import google.generativeai as genai
+from datetime import date, timedelta
+from app.agent.task_manager import TaskManager
+
+# Initialize database clients
+mongo_client = MongoDBClient()
+chroma_client = ChromaDBClient()
+
+task_manager = TaskManager(
+    mongo_client=mongo_client
+    
+)
 
 file_storage = FileStorageService()
 
@@ -36,12 +47,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# Initialize database clients
-mongo_client = MongoDBClient()
-chroma_client = ChromaDBClient()
-
 
 @app.on_event("startup")
 async def startup_event():
@@ -192,9 +197,19 @@ async def get_user_documents(user_id: str):
 
 
 # Tasks Endpoints
-# 1. יצירת מטלה חדשה
+
+@app.post("/users/{user_id}/tasks/standard")
+async def create_standard_tasks(user_id: str):
+    user = await mongo_client.get_user_profile(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    tasks = await task_manager.create_standard_tasks_for_user(user.user_id)
+    tasks_dicts = [t.dict() for t in tasks]
+    await mongo_client.update_user_tasks(user.user_id, tasks_dicts)
+    return {"message": "Standard tasks created", "tasks": tasks_dicts}
+    
 @app.post("/users/{user_id}/tasks", response_model=Task)
-async def create_task_endpoint(user_id: str, task_data: TaskCreate):
+async def create_task(user_id: str, task_data: TaskCreate):
     """
     Create Task
     If a similar task already exists, return an error
@@ -222,24 +237,27 @@ async def create_task_endpoint(user_id: str, task_data: TaskCreate):
         related_links=task_data.related_links,
         # שדות נוספים כמו created_at, completed וכו' יתווספו אוטומטית ע"י המודל
     )
-    await mongo_client.create_task(task)
+    await mongo_client.create_task(user_id, task)
     return task
 
 # 2. עדכון מטלה קיימת
 @app.patch("/tasks/{task_id}", response_model=Task)
-async def update_task_endpoint(task_id: str, task_update: dict = Body(...)):
-    """
-    Update a Task
-    """
-    updated_task = await mongo_client.update_task(task_id, task_update)
+async def update_task(task_id: str, task_update: TaskUpdate):
+    updated_task = await mongo_client.update_task(task_id, task_update.dict(exclude_unset=True))
     if not updated_task:
         raise HTTPException(status_code=404, detail="Task not found")
     return updated_task
 
+@app.get("/tasks/{task_id}", response_model=Task)
+async def get_task(task_id: str):
+    task = await mongo_client.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
 
 @app.delete("/tasks/{task_id}")
 async def delete_task(task_id: str):
-    """Delete a task"""
     success = await mongo_client.delete_task(task_id)
     if not success:
         raise HTTPException(status_code=404, detail="Task not found")

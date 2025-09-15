@@ -3,6 +3,7 @@ from typing import Optional, List
 from datetime import datetime, date
 from app.database.file_processing import DocumentStatus
 from enum import Enum
+from app.models.tasks import Task
 
 class DocumentType(str, Enum):
     BLOOD_TEST = "blood_test"
@@ -35,6 +36,7 @@ class UserProfile(BaseModel):
     allergies: List[str] = []
     medications: List[str] = []
     medical_documents: List[MedicalDocument] = []
+    tasks: List[Task] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

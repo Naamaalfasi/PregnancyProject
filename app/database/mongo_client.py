@@ -44,6 +44,7 @@ class MongoDBClient:
 
         profile_dict["pregnancy_week"] = PregnancyDataProcessor.calculate_pregnancy_week(profile_dict["lmp_date"])
         profile_dict["due_date"] = PregnancyDataProcessor.calculate_due_date(profile_dict["lmp_date"])
+        profile_dict["tasks"] = []
         profile_dict["created_at"] = datetime.utcnow()
         profile_dict["updated_at"] = datetime.utcnow()
 
@@ -184,8 +185,7 @@ class MongoDBClient:
         
         if result.modified_count == 0:
             raise HTTPException(status_code=404, detail="User profile not found or document not added")    
-
-
+    
     async def update_document_with_medical_data(self, user_id: str, document_id: str, parsed_medical_data: dict, summary: str):
         """Update existing document with extracted medical data and update user profile"""
         # Update user profile with extracted medical data
@@ -193,3 +193,83 @@ class MongoDBClient:
         await self.update_document_summary(user_id, document_id, summary)
         return True
 
+    async def create_task(self, user_id: str, task: Task):
+        """Add a task to the user's profile (embedded array)"""
+        task_dict = task.dict()
+        result = await self.db.user_profiles.update_one(
+            {"user_id": user_id},
+            {"$push": {"tasks": task_dict}}
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="User profile not found or task not added")
+        return task_dict["task_id"]
+
+    async def update_user_tasks(self, user_id: str, tasks: list):
+        """
+        עדכון כל רשימת המטלות של המשתמש
+        """
+        result = await self.db.user_profiles.update_one(
+            {"user_id": user_id},
+            {"$set": {"tasks": tasks, "updated_at": datetime.utcnow()}}
+        )
+        return result.modified_count > 0
+
+    async def get_user_tasks(self, user_id: str):
+        """
+        מחזיר את כל המטלות של המשתמש
+        """
+        user = await self.get_user_profile(user_id)
+        if user and hasattr(user, "tasks"):
+            return user.tasks
+        return []
+
+
+    async def update_task(self, task_id: str, task_update: dict):
+        """
+        עדכון מטלה בודדת לפי task_id (בתוך tasks של המשתמש)
+        """
+        # מוצאים את המשתמש שמכיל את המטלה
+        user = await self.db.user_profiles.find_one({"tasks.task_id": task_id})
+        if not user:
+            return None
+
+        # בונים את הסט לעדכון
+        set_fields = {f"tasks.$.{k}": v for k, v in task_update.items()}
+        set_fields["tasks.$.updated_at"] = datetime.utcnow()
+
+        result = await self.db.user_profiles.update_one(
+            {"tasks.task_id": task_id},
+            {"$set": set_fields}
+        )
+
+        if result.modified_count == 0:
+            return None
+
+        # מחזירים את המטלה המעודכנת (כ־dict)
+        updated_user = await self.db.user_profiles.find_one({"tasks.task_id": task_id})
+        for task in updated_user["tasks"]:
+            if task["task_id"] == task_id:
+                return task
+        return None
+
+    async def get_task(self, task_id: str):
+        """
+        מחזיר מטלה בודדת לפי task_id (מתוך tasks של המשתמש)
+        """
+        user = await self.db.user_profiles.find_one({"tasks.task_id": task_id})
+        if not user or "tasks" not in user:
+            return None
+        for task in user["tasks"]:
+            if task["task_id"] == task_id:
+                return task
+        return None
+
+    async def delete_task(self, task_id: str):
+        """
+        מוחק מטלה בודדת לפי task_id מתוך tasks של המשתמש
+        """
+        result = await self.db.user_profiles.update_one(
+            {"tasks.task_id": task_id},
+            {"$pull": {"tasks": {"task_id": task_id}}}
+        )
+        return result.modified_count > 0

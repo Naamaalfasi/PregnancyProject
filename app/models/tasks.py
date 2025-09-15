@@ -4,18 +4,18 @@ from datetime import datetime
 from enum import Enum
 
 class TaskType(str, Enum):
-    MEDICAL_CHECKUP = "medical_checkup"
-    TEST = "test"
-    PREPARATION = "preparation"
-    SHOPPING = "shopping"
-    DOCUMENTATION = "documentation"
-    EMERGENCY = "emergency"
+    MEDICAL_CHECKUP = "Medical_checkup"
+    TEST = "Test"
+    PREPARATION = "Preparation"
+    SHOPPING = "Shopping"
+    DOCUMENTATION = "Documentation"
+    EMERGENCY = "Emergency"
 
 class TaskPriority(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    URGENT = "urgent"
+    LOW = "Low"
+    MEDIUM = "Medium"
+    HIGH = "High"
+    URGENT = "Urgent"
 
 class TaskStatus(str, Enum):
     PENDING = "pending"
@@ -48,6 +48,7 @@ class Task(BaseModel):
     source: TaskSource = TaskSource.AGENT
     reason: TaskReason = TaskReason.STANDARD_SCHEDULE
     related_links: Optional[List[str]] = None
+    updated_at: Optional[datetime] = None
 
 class TaskCreate(BaseModel):
     title: str
@@ -59,3 +60,16 @@ class TaskCreate(BaseModel):
     source: TaskSource = TaskSource.USER
     reason: TaskReason = TaskReason.OTHER
     related_links: Optional[List[str]] = None
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    task_type: Optional[str] = None
+    priority: Optional[str] = None
+    pregnancy_week: Optional[int] = None
+    due_date: Optional[datetime] = None
+    source: Optional[str] = None
+    reason: Optional[str] = None
+    related_links: Optional[List[str]] = None
+    notes: Optional[str] = None
+    # אפשר להוסיף עוד שדות אם צריך
