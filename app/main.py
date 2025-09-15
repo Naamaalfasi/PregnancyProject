@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, APIRouter, Body
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional, Dict, Any
 import uuid
@@ -14,9 +14,13 @@ from app.database.file_storage import FileStorageService
 from app.database.file_processing import DocumentStatus
 from app.automation.generate_test_data import TestDataGenerator
 import os
+from app.models.tasks import TaskCreate, TaskUpdate
 from pydantic import BaseModel
 import google.generativeai as genai
 from app.database.DocumentService import DocumentService
+from datetime import date, timedelta
+from app.agent.task_manager import TaskManager
+
 
 mongo_client = MongoDBClient()
 pdf_processor = PDFProcessor()
@@ -25,6 +29,8 @@ medical_processor = MedicalDataProcessor()
 file_storage = FileStorageService()
 
 chroma_client = ChromaDBClient(embedding_generator)
+
+task_manager = TaskManager(mongo_client)
 
 document_service = DocumentService(mongo_client, chroma_client, pdf_processor, embedding_generator, medical_processor, file_storage)
 
@@ -46,6 +52,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Initialize database clients
+mongo_client = MongoDBClient()
+chroma_client = ChromaDBClient()
 
 
 @app.on_event("startup")
@@ -142,35 +153,67 @@ async def get_user_documents(user_id: str):
 
 
 # Tasks Endpoints
-@app.post("/users/{user_id}/tasks", response_model=Task)
-async def create_task(user_id: str, task: Task):
-    """Create a new task for user"""
-    task.task_id = str(uuid.uuid4())
-    task.user_id = user_id
-    task.created_at = datetime.utcnow()
+
+@app.post("/users/{user_id}/tasks/standard")
+async def create_standard_tasks(user_id: str):
+    user = await mongo_client.get_user_profile(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    tasks = await task_manager.create_standard_tasks_for_user(user.user_id)
+    tasks_dicts = [t.dict() for t in tasks]
+    await mongo_client.update_user_tasks(user.user_id, tasks_dicts)
+    return {"message": "Standard tasks created", "tasks": tasks_dicts}
     
-    await mongo_client.create_task(task)
+@app.post("/users/{user_id}/tasks", response_model=Task)
+async def create_task(user_id: str, task_data: TaskCreate):
+    """
+    Create Task
+    If a similar task already exists, return an error
+    """
+    tasks: List[Task] = await mongo_client.get_user_tasks(user_id)
+    for t in tasks:
+        if (
+            t.title == task_data.title and
+            t.task_type == task_data.task_type and
+            t.pregnancy_week == task_data.pregnancy_week
+        ):
+            raise HTTPException(status_code=409, detail="Task already exists for this user in this week")
+    # יצירת מטלה חדשה
+    task = Task(
+        task_id=str(uuid.uuid4()),
+        user_id=user_id,
+        title=task_data.title,
+        description=task_data.description,
+        task_type=task_data.task_type,
+        priority=task_data.priority,
+        pregnancy_week=task_data.pregnancy_week,
+        due_date=task_data.due_date,
+        source=task_data.source,
+        reason=task_data.reason,
+        related_links=task_data.related_links,
+        # שדות נוספים כמו created_at, completed וכו' יתווספו אוטומטית ע"י המודל
+    )
+    await mongo_client.create_task(user_id, task)
     return task
 
-
-@app.get("/users/{user_id}/tasks", response_model=List[Task])
-async def get_user_tasks(user_id: str, completed: Optional[bool] = None):
-    """Get tasks for user with optional completion filter"""
-    tasks = await mongo_client.get_user_tasks(user_id, completed)
-    return tasks
-
-@app.patch("/tasks/{task_id}")
-async def update_task(task_id: str, task_update: dict):
-    """Update task (mark as completed, change priority, etc.)"""
-    updated_task = await mongo_client.update_task(task_id, task_update)
+# 2. עדכון מטלה קיימת
+@app.patch("/tasks/{task_id}", response_model=Task)
+async def update_task(task_id: str, task_update: TaskUpdate):
+    updated_task = await mongo_client.update_task(task_id, task_update.dict(exclude_unset=True))
     if not updated_task:
         raise HTTPException(status_code=404, detail="Task not found")
     return updated_task
 
+@app.get("/tasks/{task_id}", response_model=Task)
+async def get_task(task_id: str):
+    task = await mongo_client.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
 
 @app.delete("/tasks/{task_id}")
 async def delete_task(task_id: str):
-    """Delete a task"""
     success = await mongo_client.delete_task(task_id)
     if not success:
         raise HTTPException(status_code=404, detail="Task not found")

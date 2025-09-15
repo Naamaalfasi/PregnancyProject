@@ -1,0 +1,153 @@
+[
+  {
+    "title": " בדיקת דם ושתן",
+    "description": "בדיקת דם כללית ושתן",
+    "notes": "ערכי הנורמה של בדיקות אלו עשויים להיות שונים בזמן הריון.",
+    "task_type": "Test",
+    "priority": "High",
+    "recurring": [
+      { "frequency": "once", "start_week": 6, "end_week": 12 },
+      { "frequency": "once", "start_week": 24, "end_week": 28 }
+    ]
+  },
+  {
+    "title": "מעקב אחות",
+    "description": "בדיקות לחץ דם, משקל, חלבון בשתן, ובצקות",
+    "task_type": "Test",
+    "priority": "High",
+    "recurring": [
+      { "frequency": "monthly", "start_week": 0, "end_week": 36 },
+      { "frequency": "biweekly", "start_week": 36 }
+    ]
+  },
+  {
+    "title": "אולטרסאונד שליש ראשון",
+    "description": "בדיקת מיקום שק ההריון, דופק העובר, מספר העוברים, גיל ההריון",
+    "notes": "האולטרסאונד נעשה בגישה בטנית או בגישה נרתיקית או בגישה משולבת, לפי שיקול דעת של הרופא/ה. בשבועות מוקדמים של ההיריון הגישה תהיה לרוב נרתיקית",
+    "task_type": "Test",
+    "priority": "High",
+    "recurring": [{ "frequency": "once", "start_week": 6, "end_week": 12 }]
+  },
+  {
+    "title": "סיסי שיליה - CVS",
+    "description": "אבחון מוקדם של בעיות גנטיות בעובר",
+    "notes": "בהמלצת רופא בלבד",
+    "task_type": "Test",
+    "priority": "High",
+    "recurring": [{ "frequency": "once", "start_week": 10, "end_week": 13 }]
+  },
+  {
+    "title": "בדיקת דם אמהי לאיתור עובר עם סיכון לתסמונת דאון (NIPT)",
+    "description": "זיהוי עוברים בסיכון גבוה לטריזומיה 21 (תסמונת דאון), לטריזומיה 18, לטריזומיה 13 או להפרעה בכרומוזומי המין (X ו־Y)",
+    "notes": "תוצאות הבדיקה מציגות סיכון סטטיסטי, לא אבחון. (לא מחליפה דיקור מי שפיר)",
+    "task_type": "Test",
+    "priority": "High",
+    "recurring": [{ "frequency": "once", "start_week": 10 }]
+  },
+  {
+    "title": "סקר שליש ראשון - שקיפות עורפית וסקר ביוכימי ראשון",
+    "description": "בדיקת אולטרסאונד שבה מודדים את עובי הנוזל שמצטבר בעורף העובר, סקר ביוכימי של דם האם לגילוי שני חלבונים שמופרשים מהשליה ומהעובר.",
+    "notes": "בשקלול שתי הבדיקות האלו ניתן להגיע לדיוק של כ85% בהערכת הסיכון לתסמונת דאון.",
+    "task_type": "Test",
+    "priority": "High",
+    "recurring": [
+      { "frequency": "once", "start_week": 11, "end_week": 16, "end_day": 6 }
+    ]
+  },
+  {
+    "title": "סקירת מערכות מוקדמת",
+    "description": "בדיקת שלמות מערכות הגוף של העובר ותפקודן. ניתן להבחין באיברים שלא ניתן היה להבחין בהם קודם. לרוב ניתן לזהות גם את מין העובר.",
+    "task_type": "Test",
+    "priority": "High",
+    "recurring": [{ "frequency": "once", "start_week": 14, "end_week": 16 }]
+  },
+  {
+    "title": "תבחין משולש - חלבון עוברי",
+    "description": "בדיקת הרמה של שלושה מרכיבים בדם האם: חלבון עוברי, ההורמון אסטריול וההורמון BHCG. \nשקלול התוצאות עם גיל העובר, גיל האם ומשקלה ונתונים נוספים מביאים לסיכון הסטטיסטי אם מדובר בעובר שסובל מתסמונת דאון ועוד מומים נוספים.",
+    "notes": "מומלץ לבצע את הבדיקה עד השבוע ב-18",
+    "task_type": "Test",
+    "priority": "High",
+    "recurring": [
+      { "frequency": "once", "start_week": 16, "end_week": 20, "end_day": 6 }
+    ]
+  },
+  {
+    "title": "בדיקת מי שפיר",
+    "description": "משמשת למציאת מומים כרומוזומליים בעובר כמו תסמונת דאון ופגמים גנטיים רבים נוספים",
+    "task_type": "Test",
+    "priority": "High",
+    "recurring": [{ "frequency": "once", "start_week": 16, "end_week": 22 }]
+  },
+  {
+    "title": "סקירת מערכות מאוחרת",
+    "description": "בדיקה באמצעות אולטרסאונד את שלמות מערכות הגוף של העובר ואת תפקודן - יש מערכות שמתפתחות רק לאחר השבוע ה-15.",
+    "notes": "ישנם מומים שמתפתחים לאט יכולים לבוא לידי ביטוי רק מעבר לשבוע ה-20 להריון.",
+    "task_type": "Test",
+    "priority": "High",
+    "recurring": [{ "frequency": "once", "start_week": 19, "end_week": 24 }]
+  },
+  {
+    "title": "בדיקת העמסת סוכר",
+    "description": "הבדיקה מבוצעת לצורך איתור נשים בסיכון לסוכרת הריון",
+    "task_type": "Test",
+    "priority": "High",
+    "recurring": [{ "frequency": "once", "start_week": 24, "end_week": 28 }]
+  },
+  {
+    "title": "בדיקת הערכת גדילת העובר",
+    "description": "הערכת ​משקל העובר,  קצב הגדילה שלו, הערכת המצג (ראש או ​עכוז) ואת המנח (אורכי, רוחבי או אלכסוני)",
+    "task_type": "Test",
+    "priority": "High",
+    "recurring": [{ "frequency": "once", "start_week": 35, "end_week": 37 }]
+  },
+  {
+    "title": "תרבית ל־GBS",
+    "description": "בדיקת נשאות לחידק GBS שקיים אצל 20% מהנשים ועלול להדביק את העובר.\n הבדיקה נעשית באמצעות לקיחת תרבית מהנרתיק ומהרקטום)",
+    "notes": "קיים אצל 20% מהנשים ההרות ועלול להדביק את העובר. אם התרבית חיובית יש ליידע את חדר הלידה על מנת שתינתן אנטיביוטיקה מניעתית בזמן הלידה.",
+    "task_type": "Test",
+    "priority": "High",
+    "recurring": [{ "frequency": "once", "start_week": 35, "end_week": 37 }]
+  },
+  {
+    "title": "מעקב סוף הריון",
+    "description": "בדיקת חיוניות העובר באמצעות מוניטור עוברי ובאמצעות אולטרסאונד.\nהערכת הכמות של מי השפיר, בדיקת משקל העובר (הערכה קלינית או סונוגרפית) \nבדיקת מצב האם (לחץ הדם, חלבון בשתן, המצב של צוואר הרחם).",
+    "notes": "רופא יכול להמליץ להתחיל את המעקב בשלב מוקדם יותר",
+    "task_type": "Test",
+    "priority": "High",
+    "recurring": [{ "frequency": "once", "start_week": 40 }]
+  },
+  {
+    "title": "בדיקת נוגדנים לRh",
+    "description": "לבעלות סוג גם Rh- העובר עלול לסבול מאנמיה.",
+    "notes": "רופא יכול להמליץ להתחיל את המעקב בשלב מוקדם יותר",
+    "task_type": "Test",
+    "priority": "High",
+    "condition": [
+      {
+        "field": "blood_type",
+        "operator": "equals",
+        "value": "Rh-"
+      }
+    ],
+    "recurring": [{ "frequency": "once", "start_week": 40 }]
+  },
+  {
+    "title": "חיסון Anti-D",
+    "description": "לבעלות סוג גם Rh- העובר עלול לסבול מאנמיה.",
+    "notes": "רופא יכול להמליץ להתחיל את המעקב בשלב מוקדם יותר",
+    "task_type": "Test",
+    "priority": "High",
+    "condition": [
+      {
+        "field": "Rh-_Antibodies",
+        "operator": "equals",
+        "value": "negative"
+      },
+      {
+        "field": "Fetus_blood_type",
+        "operator": "not_equals",
+        "value": "Rh-"
+      }
+    ]
+  }
+]
