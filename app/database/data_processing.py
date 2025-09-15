@@ -81,33 +81,31 @@ class PregnancyDataProcessor:
             return "third"
         else:
             return "third"
-    
+
     @staticmethod
-    def process_user_profile_data(
-        name: str,
-        lmp_date: Optional[str] = None,
-        **kwargs
-    ) -> dict:
+    def calculate_age(date_of_birth: str) -> Optional[int]:
         """
-        Process and calculate pregnancy-related data for new user profile
+        Calculate age from date of birth in DDMMYYYY format
+        Returns age in years
         """
-        processed_data = {
-            "name": name,
-            **kwargs
-        }
-        
-        if lmp_date and lmp_date != "0":
-            try:
-                processed_data["lmp_date"] = lmp_date
-                processed_data["pregnancy_week"] = PregnancyDataProcessor.calculate_pregnancy_week(lmp_date)
-                processed_data["due_date"] = PregnancyDataProcessor.calculate_due_date(lmp_date)
-                if processed_data["pregnancy_week"]:
-                    processed_data["trimester"] = PregnancyDataProcessor.calculate_trimester(processed_data["pregnancy_week"])
-            except Exception as e:
-                print(f"Warning: Error processing pregnancy data: {e}")
-                processed_data["pregnancy_week"] = None
-                processed_data["due_date"] = None
-                processed_data["trimester"] = "unknown"
-        
-        return processed_data
+        if not date_of_birth or date_of_birth == "None-String" or date_of_birth == "0":
+            return None
+            
+        try:
+            birth_datetime = PregnancyDataProcessor.parse_ddmmyyyy(date_of_birth)
+            today = datetime.now()
+            
+            # Calculate age
+            age = today.year - birth_datetime.year
+            
+            # Adjust if birthday hasn't occurred this year
+            if today.month < birth_datetime.month or (today.month == birth_datetime.month and today.day < birth_datetime.day):
+                age -= 1
+                
+            return max(0, age)  # Ensure age is not negative
+        except ValueError as e:
+            print(f"Warning: Could not calculate age from date of birth '{date_of_birth}': {e}")
+            return None
+
+    
 

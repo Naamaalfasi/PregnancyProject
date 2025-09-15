@@ -7,10 +7,10 @@ from app.config import settings
 from app.utils.embeddings import EmbeddingGenerator
 
 class ChromaDBClient:
-    def __init__(self):
+    def __init__(self, embedding_generator: EmbeddingGenerator = None):
         self.client = None
         self.collection = None
-        self.embedding_generator = EmbeddingGenerator()
+        self.embedding_generator = embedding_generator or EmbeddingGenerator()
         
     async def connect(self):
         """Connect to ChromaDB"""

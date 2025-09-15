@@ -44,12 +44,14 @@ class MongoDBClient:
 
         profile_dict["pregnancy_week"] = PregnancyDataProcessor.calculate_pregnancy_week(profile_dict["lmp_date"])
         profile_dict["due_date"] = PregnancyDataProcessor.calculate_due_date(profile_dict["lmp_date"])
+        profile_dict["age"] = PregnancyDataProcessor.calculate_age(profile_dict["date_of_birth"])
         profile_dict["created_at"] = datetime.utcnow()
         profile_dict["updated_at"] = datetime.utcnow()
 
         self._user_ids_cache.add(profile_dict["user_id"])
             
-        result = await self.db.user_profiles.insert_one(profile_dict)
+        await self.db.user_profiles.insert_one(profile_dict)
+
         return profile_dict
         
 
@@ -193,3 +195,112 @@ class MongoDBClient:
         await self.update_document_summary(user_id, document_id, summary)
         return True
 
+
+    async def get_all_users(self) -> List[UserProfile]:
+        """Get all user profiles"""
+        cursor = self.db.user_profiles.find({})
+        users = []
+        async for user_dict in cursor:
+            users.append(UserProfile(**user_dict))
+        return users
+
+    async def update_all_users_calculated_fields(self) -> dict:
+        """Update calculated fields for all users based on current date"""
+        updated_count = 0
+        error_count = 0
+        errors = []
+        
+        # Define fields to calculate and their calculation functions
+        calculated_fields = {
+            "pregnancy_week": {
+                "dependency": "lmp_date",
+                "calculator": PregnancyDataProcessor.calculate_pregnancy_week,
+                "required": True
+            },
+            "due_date": {
+                "dependency": "lmp_date", 
+                "calculator": PregnancyDataProcessor.calculate_due_date,
+                "required": True
+            },
+            "age": {
+                "dependency": "date_of_birth",
+                "calculator": PregnancyDataProcessor.calculate_age,
+                "required": False  # Age can be None if date_of_birth is missing
+            }
+        }
+        
+        # Get all users
+        cursor = self.db.user_profiles.find({})
+        
+        async for user_dict in cursor:
+            try:
+                user_id = user_dict.get("user_id")
+                if not user_id:
+                    error_count += 1
+                    errors.append("User missing user_id")
+                    continue
+                
+                # Prepare update fields
+                update_fields = {"updated_at": datetime.utcnow()}
+                user_errors = []
+                
+                # Calculate each field
+                for field_name, field_config in calculated_fields.items():
+                    dependency_field = field_config["dependency"]
+                    calculator_func = field_config["calculator"]
+                    is_required = field_config["required"]
+                    
+                    dependency_value = user_dict.get(dependency_field)
+                    
+                    # Check if dependency field exists and is valid
+                    if not dependency_value or dependency_value in ["None-String", "0", None]:
+                        if is_required:
+                            user_errors.append(f"Missing or invalid {dependency_field} for {field_name}")
+                            continue
+                        else:
+                            # Optional field - set to None
+                            update_fields[field_name] = None
+                            continue
+                    
+                    # Calculate the field value
+                    try:
+                        calculated_value = calculator_func(dependency_value)
+                        update_fields[field_name] = calculated_value
+                        
+                    except Exception as calc_error:
+                        user_errors.append(f"Error calculating {field_name}: {str(calc_error)}")
+                        continue
+                
+                # If there are errors for this user, skip update
+                if user_errors:
+                    error_count += 1
+                    errors.extend([f"User {user_id}: {error}" for error in user_errors])
+                    continue
+                
+                # Update the user's calculated fields
+                result = await self.db.user_profiles.update_one(
+                    {"user_id": user_id},
+                    {"$set": update_fields}
+                )
+                
+                if result.modified_count > 0:
+                    updated_count += 1
+                    updated_fields_str = ", ".join([f"{k}={v}" for k, v in update_fields.items() if k != "updated_at"])
+                    print(f"Updated {updated_fields_str} for user {user_id}")
+                else:
+                    error_count += 1
+                    errors.append(f"User {user_id}: No changes made")
+                    
+            except Exception as e:
+                error_count += 1
+                errors.append(f"User {user_id}: {str(e)}")
+                print(f"Error updating user {user_id}: {str(e)}")
+        
+        return {
+            "total_users_processed": updated_count + error_count,
+            "successfully_updated": updated_count,
+            "errors": error_count,
+            "error_details": errors,
+            "calculated_fields": list(calculated_fields.keys()),
+            "timestamp": datetime.utcnow().isoformat()
+        }    

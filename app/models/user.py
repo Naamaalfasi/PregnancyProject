@@ -28,6 +28,7 @@ class UserProfile(BaseModel):
     pregnancy_week: Optional[int] = Field(None, ge=1, le=42)
     lmp_date: Optional[str] = "None-String"  # Changed to str
     due_date: Optional[str] = "None-String"  # Changed to str
+    age: Optional[int] = 0
     height: Optional[float] = 0
     weight: Optional[float] = 0
     blood_type: Optional[str] = "None-String"

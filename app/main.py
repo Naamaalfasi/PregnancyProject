@@ -12,12 +12,23 @@ from app.utils.embeddings import EmbeddingGenerator
 from app.agent.medical_processor import MedicalDataProcessor
 from app.database.file_storage import FileStorageService
 from app.database.file_processing import DocumentStatus
+from app.automation.generate_test_data import TestDataGenerator
 import os
 from pydantic import BaseModel
 import google.generativeai as genai
+from app.database.DocumentService import DocumentService
 
+mongo_client = MongoDBClient()
+pdf_processor = PDFProcessor()
+embedding_generator = EmbeddingGenerator()
+medical_processor = MedicalDataProcessor()
 file_storage = FileStorageService()
 
+chroma_client = ChromaDBClient(embedding_generator)
+
+document_service = DocumentService(mongo_client, chroma_client, pdf_processor, embedding_generator, medical_processor, file_storage)
+
+test_data_generator = TestDataGenerator(mongo_client)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -35,11 +46,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# Initialize database clients
-mongo_client = MongoDBClient()
-chroma_client = ChromaDBClient()
 
 
 @app.on_event("startup")
@@ -91,40 +97,14 @@ async def update_user_profile(user_id: str, profile: UserProfile):
 
 # Medical Documents Endpoints
 @app.post("/users/{user_id}/documents")
-async def upload_medical_document(
-    user_id: str,
-    file: UploadFile = File(...),
-    document_type: DocumentType = DocumentType.OTHER
-):
-
+async def upload_medical_document( user_id: str, file: UploadFile = File(...), document_type: DocumentType = DocumentType.OTHER ):
     """Upload and process medical document"""
     # Validate user exists
     user = await mongo_client.get_user_profile(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User profile not found")
 
-    file_path = await file_storage.save_uploaded_file(user_id, file)
-
-    document = MedicalDocument(
-        document_id=str(uuid.uuid4()),
-        document_type=document_type,
-        upload_date=datetime.utcnow(),
-        file_name=file.filename,
-        file_path=file_path,
-        file_size=os.path.getsize(file_path),
-        status=DocumentStatus.UPLOADED,
-        summary= "Not processed yet"
-    )
-
-    # Store in MongoDB
-    await mongo_client.add_medical_document(user_id, document, {})
-
-    return {"message": "Document uploaded successfully",
-            "document_id": document.document_id,
-            "status": document.status,
-            "summary": document.summary,
-            "path": document.file_path
-            }
+    return await document_service.create_document(user_id, file, document_type)
     
 @app.post("/users/{user_id}/documents/{document_id}/process")
 async def process_document_background(user_id: str, document_id: str):
@@ -139,49 +119,20 @@ async def process_document_background(user_id: str, document_id: str):
     # Initialize processors
     await mongo_client.update_document_status(user_id, document_id, DocumentStatus.PROCESSING)
 
-    pdf_processor = PDFProcessor()
-    embedding_generator = EmbeddingGenerator()
-    medical_processor = MedicalDataProcessor()
+    result = await document_service.process_document(user_id, document_id)
 
-    # Read file content
-    file_content = file_storage.read_file_as_bytes(document.file_path)
-
-    # Extract text and process document
-    extracted_text = pdf_processor.extract_text_from_pdf(file_content)
-    chunks = pdf_processor.chunk_text(extracted_text)
-    medical_data = await medical_processor.extract_medical_data(extracted_text)
-    summary = await generate_summary_with_embeddings(extracted_text, chunks, embedding_generator)
-    parsed_medical_data = pdf_processor.parse_medical_summary(medical_data)
-
-    await mongo_client.update_document_with_medical_data(user_id, document_id, parsed_medical_data, summary)
-
-    # Store in ChromaDB for vector search
-    for i, chunk in enumerate(chunks):
-        await chroma_client.add_document_embedding(
-            user_id=user_id,
-            document_id=f"{document.document_id}_chunk_{i}",
-            text=chunk,
-            metadata={
-                "file_name": document.file_name,
-                "document_type": document.document_type.value,
-                "chunk_index": i,
-                "total_chunks": len(chunks),
-                "summary": summary,
-                "test_type": parsed_medical_data.get("test_type", ""),
-                "test_date": parsed_medical_data.get("test_date", "")
-            }
-        )
-    
     await mongo_client.update_document_status(user_id, document_id, DocumentStatus.COMPLETED)
-    
-    return {
-        "message": "Document processed successfully",
-        "document_id": document.document_id,
-        "summary": summary,
-        "before_extraction": medical_data,
-        "extracted_medical_data": parsed_medical_data
-    }
 
+    return result
+
+@app.post("/users/{user_id}/documents/full-flow")
+async def DocumentFullFlow(user_id: str, file: UploadFile = File(...), document_type: DocumentType = DocumentType.OTHER):
+    try:
+        result = await document_service.document_upload_and_process(user_id, file, document_type)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 
 @app.get("/users/{user_id}/documents", response_model=List[MedicalDocument])
 async def get_user_documents(user_id: str):
@@ -331,23 +282,62 @@ async def get_pregnancy_timeline(user_id: str):
     
     return timeline
 
-async def generate_summary_with_embeddings(text: str, chunks: List[str], embedding_generator: EmbeddingGenerator) -> str:
-    """Generate summary using embeddings for better context understanding"""
-    # Create embeddings for chunks to understand document structure
-    chunk_embeddings = embedding_generator.generate_embeddings_batch(chunks)
-    text_embedding = embedding_generator.generate_embedding(text)
-    similar_chunks = embedding_generator.find_similar_documents(text_embedding, chunk_embeddings)
-    
-    # Use first few chunks for summary (avoid overwhelming the model)
-    summary_chunks = [chunks[i] for i in similar_chunks]
-    summary_text = "\n\n".join(summary_chunks)
-    print(summary_text)
 
-    medical_processor = MedicalDataProcessor()
+@app.get("/users", response_model=List[UserProfile])
+async def get_all_users():
+    """Get all user profiles"""
+    users = await mongo_client.get_all_users()
+    return users
+
+
+@app.post("/users/update-all-users-calculated-fields")
+async def update_all_users_calculated_fields():
+    """Update all users calculated fields"""
+    result = await mongo_client.update_all_users_calculated_fields()
+    return {"message": "All users calculated fields updated successfully", "result": result}
+
+
+@app.post("/automation/generateDataForTests")
+async def generate_test_data(user_count: int = 5):
+    """
+    Generate test data for development and testing purposes.
     
-    # Generate summary using the focused text
-    return await medical_processor.generate_summary(summary_text)
+    - **user_count**: Number of test users to create (default: 5, max: 10)
+    
+    This endpoint will create:
+    - Test user profiles with realistic pregnancy data
+    - Sample tasks for each user
+    - Sample medical documents for each user
+    """
+    try:
+        # Generate test data
+        result = await test_data_generator.generate_complete_test_data(user_count)
+        
+        return {
+            "message": "Test data generated successfully!",
+            "summary": {
+                "users_created": result["users_created"],
+                "documents_created": result["documents_created"],
+                "generated_at": result["generated_at"]
+            },
+            "test_user_ids": result["user_ids"],
+            "details": {
+                "documents_by_user": result["documents_by_user"]
+            },
+            "testing_endpoints": {
+                "get_all_users": "GET /users",
+                "get_user_profile": "GET /users/{user_id}",
+                "get_user_documents": "GET /users/{user_id}/documents",
+                "update_user": "PUT /users/{user_id}"
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate test data: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
