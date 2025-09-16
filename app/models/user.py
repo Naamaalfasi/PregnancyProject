@@ -1,6 +1,8 @@
+from ast import Str
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, date
+from app.models.chat import Conversation
 from app.database.file_processing import DocumentStatus
 from enum import Enum
 from app.models.tasks import Task
@@ -24,6 +26,7 @@ class MedicalDocument(BaseModel):
 
 class UserProfile(BaseModel):
     user_id: Optional[str] = "None-String"
+    password: Optional[str] = "None-String"
     name: Optional[str] = "None-String"
     date_of_birth: Optional[str] = "None-String"  # Changed to str
     pregnancy_week: Optional[int] = Field(None, ge=1, le=42)
@@ -38,6 +41,8 @@ class UserProfile(BaseModel):
     medications: List[str] = []
     medical_documents: List[MedicalDocument] = []
     tasks: List[Task] = []
+    conversations: Optional[List[Conversation]] = []
+    current_conversation: Optional[str] = "None-String"
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

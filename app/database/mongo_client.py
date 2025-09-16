@@ -1,14 +1,15 @@
-from pydoc import doc
+
 import motor.motor_asyncio
 from typing import List, Optional
 from datetime import datetime
-import json
-from bson import json_util
-from fastapi import HTTPException
+import uuid
 from app.config import settings
-from app.models import UserProfile, MedicalDocument, Task
+from app.models import UserProfile, MedicalDocument, Task, DocumentType
+from app.models.chat import Conversation, ChatMessage
 from app.database.data_processing import PregnancyDataProcessor
 from app.database.file_processing import DocumentStatus
+from app.utils.password_utils import hash_password, verify_password
+from fastapi import HTTPException
 
 class MongoDBClient:
     def __init__(self):
@@ -28,6 +29,10 @@ class MongoDBClient:
         if self.client:
             self.client.close()
     
+    async def update_one(self, user_id: str, field: str, value: str):
+        """Update one field in a document"""
+        await self.db.user_profiles.update_one({"user_id": user_id}, {"$set": {field: value}})
+        return True
 
     async def _is_user_id_valid(self, user_id: str) -> bool:
         return user_id not in self._user_ids_cache
@@ -40,8 +45,9 @@ class MongoDBClient:
         profile_dict = profile.dict()
 
         if not await self._is_user_id_valid(profile_dict["user_id"]):
-            raise HTTPException(status_code=400, detail="User ID already exists")
+            return None
 
+        profile_dict["password"] = hash_password(profile_dict["password"])
         profile_dict["pregnancy_week"] = PregnancyDataProcessor.calculate_pregnancy_week(profile_dict["lmp_date"])
         profile_dict["due_date"] = PregnancyDataProcessor.calculate_due_date(profile_dict["lmp_date"])
         profile_dict["age"] = PregnancyDataProcessor.calculate_age(profile_dict["date_of_birth"])
@@ -53,8 +59,8 @@ class MongoDBClient:
             
         await self.db.user_profiles.insert_one(profile_dict)
 
-        return profile_dict
-        
+        return UserProfile(**profile_dict)
+    
 
     async def get_user_profile(self, user_id: str) -> Optional[UserProfile]:
         """Get user profile by ID"""
@@ -62,7 +68,73 @@ class MongoDBClient:
         if profile_dict:
             return UserProfile(**profile_dict)
         return None
-        
+
+    async def create_conversation(self, user_id: str, conversation: Conversation):
+        """Create a new conversation"""
+        conversation_dict = conversation.dict()
+        await self.db.user_profiles.update_one({"user_id": user_id}, {"$push": {"conversations": conversation_dict}})
+        await self.set_active_conversation(user_id, conversation_dict["conversation_id"])
+        return True
+
+    async def add_message_to_conversation(self, user_id: str, conversation_id: str, message: ChatMessage):
+        """Add a message to a conversation"""
+        message_dict = message.dict()
+        await self.db.user_profiles.update_one(
+            {"user_id": user_id, "conversations.conversation_id": conversation_id},
+            {
+                "$push": {"conversations.$.messages": message_dict},
+                "$set": {"conversations.$.updated_at": datetime.utcnow()}
+            }
+        )
+        return True     
+    
+    async def set_active_conversation(self, user_id: str, conversation_id: str):
+        """Set active conversation"""
+        await self.db.user_profiles.update_one(
+            {"user_id": user_id},
+            {"$set": {"current_conversation": conversation_id}}
+        )
+        return True
+
+    async def get_active_conversation(self, user_id: str) -> Optional[Conversation]:
+        """Get active conversation"""
+        user_profile = await self.get_user_profile(user_id)
+        if user_profile and user_profile.current_conversation:
+            return await self.get_conversation(user_id, user_profile.current_conversation)
+        return None
+    
+    async def get_conversation(self, user_id: str, conversation_id: str) -> Optional[Conversation]:
+        """Get conversation by ID"""
+        user_profile = await self.get_user_profile(user_id)
+        if user_profile and user_profile.conversations:
+            for conversation in user_profile.conversations:
+                if conversation.conversation_id == conversation_id:
+                    return conversation
+        return None
+    
+    async def get_user_conversations(self, user_id: str) -> List[Conversation]:
+        """Get user conversations"""
+        user_profile = await self.get_user_profile(user_id)  # Returns UserProfile object
+        if user_profile and user_profile.conversations:
+            return user_profile.conversations
+        return []
+
+    async def verify_password(self, user_id: str, password: str) -> bool:
+        """Verify password"""
+        profile = await self.get_user_profile(user_id)
+        if profile:
+            return verify_password(password, profile.password)
+        return False
+
+    async def change_password(self, user_id: str, oldPassword: str, newPassword: str) -> bool:
+        """Change password"""
+        profile = await self.get_user_profile(user_id)
+        if profile:
+            if verify_password(oldPassword, profile.password):
+                profile.password = hash_password(newPassword)
+                await self.update_user_profile(user_id, profile)
+                return True
+        return False
 
     async def update_user_profile(self, user_id: str, profile: UserProfile) -> Optional[UserProfile]:
         """Update user profile"""
@@ -384,3 +456,24 @@ class MongoDBClient:
             {"$pull": {"tasks": {"task_id": task_id}}}
         )
         return result.modified_count > 0
+    
+    async def delete_user_by_id(self, user_id: str) -> str:
+        """Delete a single user by user_id"""
+        try:
+            # Check if user exists first
+            user = await self.get_user_profile(user_id)
+            if not user:
+                return f"User {user_id} not found"
+            
+            # Delete the user
+            result = await self.db.user_profiles.delete_one({"user_id": user_id})
+            
+            if result.deleted_count > 0:
+                # Remove from cache if it exists
+                self._user_ids_cache.discard(user_id)
+                return f"Successfully deleted user {user_id}"
+            else:
+                return f"Failed to delete user {user_id}"
+                
+        except Exception as e:
+            return f"Error deleting user {user_id}: {str(e)}"

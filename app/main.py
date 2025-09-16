@@ -4,7 +4,8 @@ from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime
 from app.config import settings
-from app.models import UserProfile, MedicalDocument, Task, ChatRequest, ChatResponse, DocumentType
+from app.models import UserProfile, MedicalDocument, Task, DocumentType
+from app.models.chat import Conversation, ChatMessage
 from app.database.mongo_client import MongoDBClient
 from app.database.chroma_client import ChromaDBClient
 from app.utils.pdf_processor import PDFProcessor
@@ -13,6 +14,7 @@ from app.agent.medical_processor import MedicalDataProcessor
 from app.database.file_storage import FileStorageService
 from app.database.file_processing import DocumentStatus
 from app.automation.generate_test_data import TestDataGenerator
+from app.agent.ChatService import ChatService
 import os
 from app.models.tasks import TaskCreate, TaskUpdate
 from pydantic import BaseModel
@@ -36,6 +38,8 @@ document_service = DocumentService(mongo_client, chroma_client, pdf_processor, e
 
 test_data_generator = TestDataGenerator(mongo_client)
 
+chat_service = ChatService(mongo_client)
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Pregnancy Agent API",
@@ -52,11 +56,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# Initialize database clients
-mongo_client = MongoDBClient()
-chroma_client = ChromaDBClient()
 
 
 @app.on_event("startup")
@@ -92,6 +91,18 @@ async def get_user_profile(user_id: str):
     if not profile:
         raise HTTPException(status_code=404, detail="User profile not found")
     return profile
+
+
+@app.post("/users/{user_id}/verify-password")
+async def verify_password(user_id: str, password: str):
+    """Verify password"""
+    return await mongo_client.verify_password(user_id, password)
+
+
+@app.post("/users/{user_id}/change-password")
+async def change_password(user_id: str, oldPassword: str, newPassword: str):
+    """Change password"""
+    return await mongo_client.change_password(user_id, oldPassword, newPassword)
 
 
 @app.put("/users/{user_id}", response_model=UserProfile)
@@ -135,6 +146,7 @@ async def process_document_background(user_id: str, document_id: str):
     await mongo_client.update_document_status(user_id, document_id, DocumentStatus.COMPLETED)
 
     return result
+
 
 @app.post("/users/{user_id}/documents/full-flow")
 async def DocumentFullFlow(user_id: str, file: UploadFile = File(...), document_type: DocumentType = DocumentType.OTHER):
@@ -267,25 +279,25 @@ async def test_chat(user_id: str, message: str):
     prompt_profile = user.model_dump_json(exclude_none=True)
 
     prompt = f"""
-Answer the question below.
+        Answer the question below.
 
-USER PROFILE: {prompt_profile}
+        USER PROFILE: {prompt_profile}
 
-HERE is the conversation history: {context}
+        HERE is the conversation history: {context}
 
-Question: {message}
+        Question: {message}
 
-IMPORTANT:
-- Use the UserProfile ONLY to personalize the answer.
-- Consider the user's pregnancy week, medical conditions, and allergies
-- Provide safe, evidence-based pregnancy advice
-- If medical concerns arise, suggest consulting a healthcare provider
-- Be supportive and informative
-- If the private context is missing or not relevant, answer from your general medical knowledge.
-- Prioritize safety; avoid diagnoses; suggest consulting a healthcare provider when appropriate.
+        IMPORTANT:
+        - Use the UserProfile ONLY to personalize the answer.
+        - Consider the user's pregnancy week, medical conditions, and allergies
+        - Provide safe, evidence-based pregnancy advice
+        - If medical concerns arise, suggest consulting a healthcare provider
+        - Be supportive and informative
+        - If the private context is missing or not relevant, answer from your general medical knowledge.
+        - You're a replacement to a doctor - not an addition to it.
 
-Answer:
-""".strip()
+        Your answer:
+        """.strip()
 
     try:
         resp = _gemini.generate_content(prompt)
@@ -301,6 +313,26 @@ Answer:
     CHAT_CONTEXTS[session_id] = context
     return {"response": answer}
 
+
+@app.post("/chat/process-chat-message")
+async def chat_gemini(user_id: str, message: str):
+    return await chat_service.process_chat_message(user_id, message)
+
+@app.post("/chat/get-all-conversations-by-user-id")
+async def get_all_conversations(user_id: str):
+    return await chat_service.get_user_conversations(user_id)
+
+@app.post("/chat/get-conversation-by-id")
+async def get_conversation(user_id: str, conversation_id: str):
+    return await chat_service.get_conversation_by_id(user_id, conversation_id)
+
+@app.post("/chat/new-conversation")
+async def new_conversation(user_id: str):
+    return await chat_service.create_new_conversation(user_id)
+
+@app.post("/chat/switch-to-conversation")
+async def switch_to_conversation(user_id: str, conversation_id: str):
+    return await chat_service.switch_to_conversation(user_id, conversation_id)
 
 # Pregnancy Timeline Endpoints
 @app.get("/users/{user_id}/timeline")
@@ -341,16 +373,14 @@ async def update_all_users_calculated_fields():
 
 
 @app.post("/automation/generateDataForTests")
-async def generate_test_data(user_count: int = 5):
+async def generate_test_data(user_count: int):
     """
     Generate test data for development and testing purposes.
     
     - **user_count**: Number of test users to create (default: 5, max: 10)
     
     This endpoint will create:
-    - Test user profiles with realistic pregnancy data
-    - Sample tasks for each user
-    - Sample medical documents for each user
+    - Test user profiles with realistic pregnancy data (tasks, documents, etc.)
     """
     try:
         # Generate test data
@@ -366,17 +396,18 @@ async def generate_test_data(user_count: int = 5):
             "test_user_ids": result["user_ids"],
             "details": {
                 "documents_by_user": result["documents_by_user"]
-            },
-            "testing_endpoints": {
-                "get_all_users": "GET /users",
-                "get_user_profile": "GET /users/{user_id}",
-                "get_user_documents": "GET /users/{user_id}/documents",
-                "update_user": "PUT /users/{user_id}"
             }
         }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate test data: {str(e)}")
+
+
+@app.post("/automation/cleanupTestData")
+async def cleanup_test_data():
+    """Cleanup test data"""
+    result = await test_data_generator.cleanup_test_data()
+    return {"message": "Test data cleaned up successfully", "result": result}
 
 
 if __name__ == "__main__":

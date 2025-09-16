@@ -61,7 +61,7 @@ class TestDataGenerator:
         weight = round(random.uniform(50, 100), 1)   # kg
         return height, weight
 
-    async def create_test_user_profiles(self, count: int = 5) -> List[str]:
+    async def create_test_user_profiles(self, count: int) -> List[str]:
         """Create test user profiles"""
         created_user_ids = []
         
@@ -77,6 +77,7 @@ class TestDataGenerator:
             # Create user profile
             profile = UserProfile(
                 user_id=user_id,
+                password=random.randint(100000, 999999),
                 name=self.names[i],
                 date_of_birth=date_of_birth,
                 lmp_date=lmp_date,
@@ -87,6 +88,7 @@ class TestDataGenerator:
                 allergies=random.choice(self.common_allergies),
                 medications=random.choice(self.common_medications),
                 medical_documents=[],
+                tasks=[],
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
             )
@@ -145,7 +147,7 @@ class TestDataGenerator:
         
         return created_documents
 
-    async def generate_complete_test_data(self, user_count: int = 5) -> Dict[str, Any]:
+    async def generate_complete_test_data(self, user_count: int) -> Dict[str, Any]:
         """Generate complete test data set"""
         
         # Create users
@@ -168,13 +170,20 @@ class TestDataGenerator:
         
         return result
 
-    async def cleanup_test_data(self, user_ids: List[str]):
-        """Clean up test data"""
+    async def cleanup_test_data(self, user_ids: List[str] = None):
+        """Clean up test data - get all users and delete those with 'test' in user_id"""
         
-        for user_id in user_ids:
-            # Delete user profile (this should cascade delete tasks and documents)
-            result = await self.mongo_client.db.user_profiles.delete_one({"user_id": user_id})
-            if result.deleted_count > 0:
-                print(f"✅ Deleted user: {user_id}")
-            else:
-                print(f"❌ User not found: {user_id}")
+        # Get all users using existing mongo_client method
+        all_users = await self.mongo_client.get_all_users()
+        
+        deleted_count = 0
+        
+        for user in all_users:
+            # Check if user_id contains "test"
+            if "test_" in user.user_id.lower():
+                # Use the delete method
+                message = await self.mongo_client.delete_user_by_id(user.user_id)
+                print(f"✅ {message}")
+                deleted_count += 1
+        
+        return f"Cleanup completed - deleted {deleted_count} test users"
