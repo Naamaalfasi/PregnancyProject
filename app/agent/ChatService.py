@@ -68,8 +68,10 @@ class ChatService:
         conversation = await self.mongo_client.get_conversation(user_id, conversation_id)
         if conversation.subject == "New Conversation":
             subject = await self.generate_subject(content)
-            await self.mongo_client.update_one(user_id, "updated_at", datetime.utcnow())
-            await self.mongo_client.update_one(user_id, "subject", subject) 
+            await self.mongo_client.db.user_profiles.update_one(
+                {"user_id": user_id, "conversations.conversation_id": conversation_id},
+                {"$set": {"conversations.$.subject": subject}}
+            )
 
         await self.mongo_client.add_message_to_conversation(user_id, conversation_id, message)
         return True
