@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, APIRouter, Body
+from fastapi import FastAPI, HTTPException, UploadFile, File, APIRouter, Body, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional, Dict, Any
 import uuid
@@ -22,6 +22,7 @@ import google.generativeai as genai
 from app.database.DocumentService import DocumentService
 from datetime import date, timedelta
 from app.agent.task_manager import TaskManager
+from app.utils.jwt_utils import create_access_token
 
 
 mongo_client = MongoDBClient()
@@ -63,6 +64,8 @@ async def startup_event():
     """Initialize database connections on startup"""
     await mongo_client.connect()
     await chroma_client.connect()
+    await mongo_client.db.user_profiles.create_index("user_id", unique=True)
+    await mongo_client.db.user_profiles.create_index("email", unique=True)  # מומלץ!
 
 
 @app.on_event("shutdown")
@@ -267,6 +270,16 @@ CHAT_CONTEXTS = {}
 genai.configure(api_key=settings.GOOGLE_API_KEY)
 _gemini = genai.GenerativeModel(settings.GEMINI_MODEL)
 
+@app.post("/login")
+async def login(email: str = Body(...), password: str = Body(...)):
+    user = await mongo_client.get_user_by_email(email)
+    if not user or not await mongo_client.verify_password_by_email(email, password):
+        raise HTTPException(status_code=401, detail="Email or password incorrect")
+    # יצירת token
+    token = create_access_token({"user_id": user.user_id, "email": user.email})
+    return {"success": True, "token": token}
+
+
 @app.post("/chat/test")
 async def test_chat(user_id: str, message: str):
     # Fetch the user profile from DB using user_id
@@ -408,6 +421,17 @@ async def cleanup_test_data():
     """Cleanup test data"""
     result = await test_data_generator.cleanup_test_data()
     return {"message": "Test data cleaned up successfully", "result": result}
+
+
+def get_current_user(token: str = Header(...)):
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return payload  # או לשלוף את המשתמש מה־DB לפי user_id
+
+@app.get("/protected")
+async def protected_route(current_user=Depends(get_current_user)):
+    return {"message": f"Hello {current_user['email']}"}
 
 
 if __name__ == "__main__":

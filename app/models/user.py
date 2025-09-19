@@ -26,6 +26,7 @@ class MedicalDocument(BaseModel):
 
 class UserProfile(BaseModel):
     user_id: Optional[str] = "None-String"
+    email: Optional[str] = "None-String"
     password: Optional[str] = "None-String"
     name: Optional[str] = "None-String"
     date_of_birth: Optional[str] = "None-String"  # Changed to str

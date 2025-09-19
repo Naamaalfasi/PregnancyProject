@@ -77,6 +77,7 @@ class TestDataGenerator:
             # Create user profile
             profile = UserProfile(
                 user_id=user_id,
+                email=f"test{i+1}@example.com", 
                 password=random.randint(100000, 999999),
                 name=self.names[i],
                 date_of_birth=date_of_birth,

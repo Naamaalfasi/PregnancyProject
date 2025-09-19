@@ -10,6 +10,7 @@ from app.database.data_processing import PregnancyDataProcessor
 from app.database.file_processing import DocumentStatus
 from app.utils.password_utils import hash_password, verify_password
 from fastapi import HTTPException
+from pymongo.errors import DuplicateKeyError
 
 class MongoDBClient:
     def __init__(self):
@@ -47,6 +48,14 @@ class MongoDBClient:
         if not await self._is_user_id_valid(profile_dict["user_id"]):
             return None
 
+        # צור user_id חדש
+        profile_dict["user_id"] = str(uuid.uuid4())
+
+        # בדיקת ייחודיות אימייל
+        existing = await self.db.user_profiles.find_one({"email": profile_dict["email"]})
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already exists")
+
         profile_dict["password"] = hash_password(profile_dict["password"])
         profile_dict["pregnancy_week"] = PregnancyDataProcessor.calculate_pregnancy_week(profile_dict["lmp_date"])
         profile_dict["due_date"] = PregnancyDataProcessor.calculate_due_date(profile_dict["lmp_date"])
@@ -57,7 +66,15 @@ class MongoDBClient:
 
         self._user_ids_cache.add(profile_dict["user_id"])
             
-        await self.db.user_profiles.insert_one(profile_dict)
+        try:
+            await self.db.user_profiles.insert_one(profile_dict)
+        except DuplicateKeyError:
+            # במקרה הנדיר של user_id כפול, נסה שוב פעם אחת
+            profile_dict["user_id"] = str(uuid.uuid4())
+            try:
+                await self.db.user_profiles.insert_one(profile_dict)
+            except DuplicateKeyError:
+                raise HTTPException(status_code=500, detail="Failed to generate unique user_id")
 
         return UserProfile(**profile_dict)
     
@@ -477,3 +494,15 @@ class MongoDBClient:
                 
         except Exception as e:
             return f"Error deleting user {user_id}: {str(e)}"
+
+    async def get_user_by_email(self, email: str) -> Optional[UserProfile]:
+        profile_dict = await self.db.user_profiles.find_one({"email": email})
+        if profile_dict:
+            return UserProfile(**profile_dict)
+        return None
+
+    async def verify_password_by_email(self, email: str, password: str) -> bool:
+        profile = await self.get_user_by_email(email)
+        if profile:
+            return verify_password(password, profile.password)
+        return False
