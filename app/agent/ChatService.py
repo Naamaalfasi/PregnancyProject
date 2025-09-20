@@ -4,21 +4,16 @@ import uuid
 from app.database.mongo_client import MongoDBClient
 from app.models.chat import Conversation, ChatMessage
 from app.models.user import UserProfile
-from app.agent.chatAI import chain
-from app.config import settings
 import google.generativeai as genai
 from fastapi import HTTPException
 
 
 class ChatService:
-    def __init__(self, mongo_client: MongoDBClient):
+    def __init__(self, mongo_client: MongoDBClient, gemini: genai.GenerativeModel):
         self.mongo_client = mongo_client
         self.token_limit = 4000
         self.warning_threshold = 3200  # 80% of limit
-        
-        # Configure Gemini
-        genai.configure(api_key=settings.GOOGLE_API_KEY)
-        self._gemini = genai.GenerativeModel(settings.GEMINI_MODEL)
+        self._gemini = gemini
     
     async def should_archive_conversation(self, conversation: Conversation, new_message: str) -> bool:
         """Check if conversation should be archived after adding new message"""
@@ -43,13 +38,39 @@ class ChatService:
     async def create_new_conversation(self, user_id: str) -> Conversation:
         """Create a new conversation and set as active"""
         conversation_id = str(uuid.uuid4())
+
+        system_message = ChatMessage(
+            message_id=str(uuid.uuid4()),
+            role="system",
+            content="""You are part of a comprehensive pregnancy application that provides:
+
+                        SERVICES:
+                        - Pregnancy week tracking and milestone guidance
+                        - Medical document analysis and storage
+                        - Personalized task recommendations
+                        - Nutritional and lifestyle advice
+                        - Symptom monitoring and guidance
+                        - Appointment scheduling reminders
+                        - Profile updates
+
+                        YOUR ROLE:
+                        - You are a pregnancy knowledge assistant that provides detailed, evidence-based educational information, tailored recommendations, and support based on user input.
+                        - Provide evidence-based answers for pregnancy-related questions
+                        - Offer personalized recommendations based on the user's profile and the conversation history
+                        - Support users with pregnancy concerns and questions
+                        - refering the user to other sources of information is only allowed if explicitly asked.
+
+                        Any text from here will be either metadata, context, or user's messages. Good luck! """,
+
+            timestamp=datetime.utcnow()
+        )
         
         conversation = Conversation(
             conversation_id=conversation_id,
             subject="New Conversation",
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
-            messages=[]
+            messages=[system_message]
         )
         
         await self.mongo_client.create_conversation(user_id, conversation)
@@ -82,51 +103,72 @@ class ChatService:
         for message in conversation.messages:
             context += f"{message.role}: {message.content}\n"
         return context
-    
-    async def generate_ai_response(self, user: UserProfile, user_message: str) -> str:
-        """Generate AI response using chatAI module"""
-        # Build context from conversation
-        conversation = await self.mongo_client.get_active_conversation(user.user_id)
-        context = await self.get_conversation_context(conversation)
-        
+
+    async def analyze_profile_updates(self, user: UserProfile, user_message: str, context: str) -> str:
+        """AI 1: Analyze message for potential profile updates"""
         filtered_user = user.dict(exclude={'conversations'})
-        # Prepare payload for chatAI module
-        payload = {
-            "UserProfile": filtered_user,
-            "context": context,
-            "question": user_message
-        }
+        
+        profile_analysis_prompt = f"""
+        You are a profile update analyzer for a pregnancy application.
+
+        Analyze the user's message to detect if they are providing information that should update their profile.
+        
+        Look for:
+        - Personal information (weight, height, age, blood type, name)
+        - Pregnancy-related dates (LMP date, due date)
+        - Medical information (allergies, medications, conditions)
+        - Any factual statements about themselves
+        
+        If you detect profile updates needed, respond with:
+        !$UPDATE$numOfUpdates$field_name1$value1$field_name2$value2$!
+        
+        Available fields: weight, height, age, blood_type, name, lmp_date, due_date, allergies, medications, medical_conditions
+        
+        Examples:
+        - "My blood type is AB-" → !$UPDATE$1$blood_type$AB-$!
+        - "I weigh 65kg and I'm 30 years old" → !$UPDATE$2$weight$65kg$age$30$!
+        - "I have no allergies" → !$UPDATE$1$allergies$[]$!
+        
+        If NO profile updates are needed, respond with: NO_UPDATE. 
+
+        Here are the user's profile and the conversation history:
+        
+        USER PROFILE: {filtered_user}
+        CONVERSATION HISTORY: {context}
+        USER MESSAGE: {user_message}        
+        
+        Your analysis:
+        """
         
         try:
-            # Use the chatAI module
-            answer = chain.invoke(payload)
-            return answer
+            response = self._gemini.generate_content(profile_analysis_prompt)
+            return response.text if hasattr(response, "text") else str(response)
         except Exception as e:
-            # Fallback to direct Gemini call if chatAI fails
-            prompt_profile = filtered_user
-            
-            prompt = f"""
-                Answer the question below.
+            print(f"Profile analysis error: {e}")
+            return "NO_UPDATE"
 
-                USER PROFILE: {prompt_profile}
+    async def generate_organic_response(self, user: UserProfile, user_message: str, context: str, profile_updates_applied: List[dict]) -> str:
+        """AI 2: Generate organic response based on user profile"""
+        filtered_user = user.dict(exclude={'conversations'})
+        
+        organic_prompt = f"""
+        ANSWER THE USER'S QUESTION BASED ON THE USER'S PROFILE AND THE CONVERSATION HISTORY.
+        
+        USER PROFILE: {filtered_user}
+        CONVERSATION HISTORY: {context}
+        USER MESSAGE: {user_message}
+        PROFILE UPDATES APPLIED: {profile_updates_applied}
+        Provide a helpful, personalized response based on the user's profile and their question.
 
-                HERE is the conversation history: {context}
+        Major guidelines:
+        - If they ask about medical documents, direct them to upload through the app.
+        - If profile updates were applied - Update the user, If not - do not mention it.
+        Your response:
+        """
+        
+        response = self._gemini.generate_content(organic_prompt)
+        return response.text if hasattr(response, "text") else str(response)
 
-                Question: {user_message}
-
-                IMPORTANT:
-                - Use the UserProfile ONLY to personalize the answer.
-                - Consider the user's pregnancy week, medical conditions, and allergies
-                - Provide safe, evidence-based pregnancy advice
-                - If medical concerns arise, suggest consulting a healthcare provider
-                - Be supportive and informative
-                - If the private context is missing or not relevant, answer from your general medical knowledge.
-
-                Your answer:
-                """.strip()
-            
-            resp = self._gemini.generate_content(prompt)
-            return resp.text if hasattr(resp, "text") else str(resp)
     
     async def process_chat_message(self, user_id: str, message: str) -> dict:
         """Main method to process a chat message"""
@@ -139,6 +181,9 @@ class ChatService:
         active_conversation = await self.mongo_client.get_active_conversation(user_id)
         if not active_conversation:
             active_conversation = await self.create_new_conversation(user_id)
+
+
+        context = await self.get_conversation_context(active_conversation)
         
         # Check if we should archive after this exchange
         should_archive = await self.should_archive_conversation(active_conversation, message)
@@ -152,33 +197,45 @@ class ChatService:
         )
         
         # Generate AI response
+        organic_response = ""
+        profile_updates_applied = []
         try:
-            ai_response = await self.generate_ai_response(user, message)
+            profile_update_analysis = await self.analyze_profile_updates(user, message, context)
+
+            if profile_update_analysis and profile_update_analysis != "NO_UPDATE":
+                profile_updates_applied = await self.parse_and_execute_profile_updates(user_id, profile_update_analysis)
+
+            organic_response = await self.generate_organic_response(user, message, context, profile_updates_applied)
+
         except Exception as e:
+            organic_response = "I'm sorry, I couldn't process your message. Please try again."
             err_msg = str(e)
             if "429" in err_msg or "ResourceExhausted" in err_msg:
                 raise HTTPException(status_code=429, detail="Gemini quota exceeded. Please try again later.")
             raise HTTPException(status_code=500, detail="Gemini error: " + err_msg)
-        
+
+
         # Add AI response
         await self.add_message_to_conversation(
             user_id, 
             active_conversation.conversation_id, 
             "ai", 
-            ai_response
+            organic_response
         )
         
         # Archive conversation if needed
         if should_archive:
             await self.create_new_conversation(user_id)
             return {
-                "response": ai_response, 
+                "Organic_response": organic_response, 
+                "Profile_updates_applied": profile_updates_applied,
                 "conversation_archived": True,
                 "conversation_id": active_conversation.conversation_id
             }
         
         return {
-            "response": ai_response, 
+            "Organic_response": organic_response, 
+            "Profile_updates_applied": profile_updates_applied,
             "conversation_archived": False,
             "conversation_id": active_conversation.conversation_id
         }
@@ -202,3 +259,97 @@ class ChatService:
         if not conversation:
             return None
         return conversation
+
+    async def parse_and_execute_profile_updates(self, user_id: str, update_command: str) -> List[dict]:
+        """Parse profile update command and execute updates, return list of applied updates"""
+        import re
+        
+        # Pattern to match !$UPDATE$numOfUpdates$field_name1$value1$field_name2$value2$!
+        pattern = r'!\$UPDATE\$(\d+)\$([^!]+)\$!'
+        match = re.match(pattern, update_command)
+        
+        applied_updates = []
+        
+        if match:
+            num_updates = int(match.group(1))
+            fields_data = match.group(2)
+            
+            # Parse field-value pairs
+            field_value_pairs = fields_data.split('$')
+            
+            # Validate number of pairs matches expected count
+            if len(field_value_pairs) == num_updates * 2:
+                # Execute all updates
+                for i in range(0, len(field_value_pairs), 2):
+                    field = field_value_pairs[i]
+                    value = field_value_pairs[i + 1]
+                    
+                    success = await self.execute_profile_update(user_id, field, value)
+                    applied_updates.append({
+                        "field": field,
+                        "value": value,
+                        "success": success
+                    })
+        
+        return applied_updates
+
+    async def execute_profile_update(self, user_id: str, field: str, value: str) -> bool:
+        """Execute single profile update and return success status"""
+        field_mapping = {
+            'weight': 'weight',
+            'height': 'height',
+            'pregnancy_week': 'pregnancy_week',
+            'blood_type': 'blood_type',
+            'age': 'age',
+            'lmp_date': 'lmp_date',
+            'due_date': 'due_date',
+            'name': 'name',
+            'allergies': 'allergies',
+            'medications': 'medications',
+            'medical_conditions': 'medical_conditions'
+        }
+        
+        if field in field_mapping:
+            db_field = field_mapping[field]
+            converted_value = self._convert_field_value(db_field, value)
+            
+            if converted_value is not None:
+                try:
+                    await self.mongo_client.update_one(user_id, db_field, converted_value)
+                    return True
+                except Exception as e:
+                    print(f"Error updating {field}: {e}")
+                    return False
+        return False
+
+    def _convert_field_value(self, field: str, value: str):
+        """Convert string value to appropriate type for database field"""
+        try:
+            if field in ['weight', 'height']:
+                # Extract number from string like "60kg" or "165cm"
+                import re
+                number = re.findall(r'[\d.]+', value)
+                if number:
+                    return float(number[0])
+            elif field == 'pregnancy_week':
+                return int(value)
+            elif field == 'age':
+                return int(value)
+            elif field in ['allergies', 'medications', 'medical_conditions']:
+                # Handle list fields
+                if value == "[]":
+                    return []
+                # If it's a string representation of a list, parse it
+                if value.startswith('[') and value.endswith(']'):
+                    try:
+                        import ast
+                        return ast.literal_eval(value)
+                    except:
+                        return [value]
+                return [value]
+            elif field in ['blood_type', 'name', 'due_date', 'lmp_date']:
+                return value
+            else:
+                return value
+        except (ValueError, TypeError):
+            return None   
