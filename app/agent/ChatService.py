@@ -163,6 +163,7 @@ class ChatService:
         Major guidelines:
         - If they ask about medical documents, direct them to upload through the app.
         - If profile updates were applied - Update the user, If not - do not mention it.
+        - If question is not related to pregnancy, do not answer it.
         Your response:
         """
         
