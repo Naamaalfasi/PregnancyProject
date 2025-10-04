@@ -90,11 +90,27 @@ async def get_user_profile(user_id: str):
         raise HTTPException(status_code=404, detail="User profile not found")
     return profile
 
+@app.get("/users/{user_id}/validate", response_model=bool)
+async def validate_user_id(user_id: str):
+    """Validate user ID"""
+    profile = await mongo_client.get_user_profile(user_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    return True
 
-@app.post("/users/{user_id}/verify-password")
-async def verify_password(user_id: str, password: str):
+@app.get("/users/email/{email}", response_model=str)
+async def get_user_id_by_email(email: str):
+    """Get user ID by email"""
+    profile = await mongo_client.get_user_profile_by_email(email)
+    if not profile:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    return profile.user_id
+
+
+@app.post("/users/verify-password")
+async def verify_password(email: str = Body(), password: str = Body()):
     """Verify password"""
-    return await mongo_client.verify_password(user_id, password)
+    return await mongo_client.verify_password(email, password)
 
 
 @app.post("/users/{user_id}/change-password")

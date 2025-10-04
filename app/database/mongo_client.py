@@ -15,7 +15,7 @@ class MongoDBClient:
     def __init__(self):
         self.client = None
         self.db = None
-        self._user_ids_cache = set()
+        self._email_cache = set()
         
 
     async def connect(self):
@@ -34,8 +34,8 @@ class MongoDBClient:
         await self.db.user_profiles.update_one({"user_id": user_id}, {"$set": {field: value}})
         return True
 
-    async def _is_user_id_valid(self, user_id: str) -> bool:
-        return user_id not in self._user_ids_cache
+    async def _is_email_valid(self, email: str) -> bool:
+        return email not in self._email_cache
 
 
     # User Profile Methods
@@ -44,10 +44,12 @@ class MongoDBClient:
 
         profile_dict = profile.dict()
 
-        if not await self._is_user_id_valid(profile_dict["user_id"]):
+        if not await self._is_email_valid(profile_dict["email"]):
             return None
 
+        profile_dict["user_id"] = str(uuid.uuid4())
         profile_dict["password"] = hash_password(profile_dict["password"])
+        profile_dict["email"] = profile_dict["email"].lower()
         profile_dict["pregnancy_week"] = PregnancyDataProcessor.calculate_pregnancy_week(profile_dict["lmp_date"])
         profile_dict["due_date"] = PregnancyDataProcessor.calculate_due_date(profile_dict["lmp_date"])
         profile_dict["age"] = PregnancyDataProcessor.calculate_age(profile_dict["date_of_birth"])
@@ -55,7 +57,7 @@ class MongoDBClient:
         profile_dict["created_at"] = datetime.utcnow()
         profile_dict["updated_at"] = datetime.utcnow()
 
-        self._user_ids_cache.add(profile_dict["user_id"])
+        self._email_cache.add(profile_dict["email"])
             
         await self.db.user_profiles.insert_one(profile_dict)
 
@@ -119,9 +121,16 @@ class MongoDBClient:
             return user_profile.conversations
         return []
 
-    async def verify_password(self, user_id: str, password: str) -> bool:
+    async def get_user_profile_by_email(self, email: str) -> Optional[UserProfile]:
+        """Get user profile by email"""
+        profile_dict = await self.db.user_profiles.find_one({"email": email})
+        if profile_dict:
+            return UserProfile(**profile_dict)
+        return None
+
+    async def verify_password(self, email: str, password: str) -> bool:
         """Verify password"""
-        profile = await self.get_user_profile(user_id)
+        profile = await self.get_user_profile_by_email(email)
         if profile:
             return verify_password(password, profile.password)
         return False
@@ -470,7 +479,7 @@ class MongoDBClient:
             
             if result.deleted_count > 0:
                 # Remove from cache if it exists
-                self._user_ids_cache.discard(user_id)
+                self._email_cache.discard(user.email)
                 return f"Successfully deleted user {user_id}"
             else:
                 return f"Failed to delete user {user_id}"
