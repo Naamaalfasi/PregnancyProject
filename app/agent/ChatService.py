@@ -150,9 +150,22 @@ class ChatService:
     async def generate_organic_response(self, user: UserProfile, user_message: str, context: str, profile_updates_applied: List[dict]) -> str:
         """AI 2: Generate organic response based on user profile"""
         filtered_user = user.dict(exclude={'conversations'})
-        
+
+        # Detect if the user message is in Hebrew (basic heuristic: presence of Hebrew unicode range)
+        is_hebrew = any('\u0590' <= ch <= '\u05FF' for ch in user_message)
+        language_instruction = (
+            "IMPORTANT: Respond in Hebrew (עברית תקנית), keep the entire answer in Hebrew."
+            if is_hebrew else
+            "IMPORTANT: Respond in the user's language."
+        )
+
         organic_prompt = f"""
+        {language_instruction}
+
         ANSWER THE USER'S QUESTION BASED ON THE USER'S PROFILE AND THE CONVERSATION HISTORY.
+        Keep tone empathetic and clear, suitable for a pregnancy assistant.
+        If you list steps or tips, use short bullet points.
+        Avoid hallucinations; if unsure, say what info is needed.
         
         USER PROFILE: {filtered_user}
         CONVERSATION HISTORY: {context}
@@ -166,7 +179,7 @@ class ChatService:
         - If question is not related to pregnancy, do not answer it.
         Your response:
         """
-        
+
         response = self._gemini.generate_content(organic_prompt)
         return response.text if hasattr(response, "text") else str(response)
 
@@ -228,14 +241,14 @@ class ChatService:
         if should_archive:
             await self.create_new_conversation(user_id)
             return {
-                "Organic_response": organic_response, 
+                "response": organic_response, 
                 "Profile_updates_applied": profile_updates_applied,
                 "conversation_archived": True,
                 "conversation_id": active_conversation.conversation_id
             }
         
         return {
-            "Organic_response": organic_response, 
+            "response": organic_response, 
             "Profile_updates_applied": profile_updates_applied,
             "conversation_archived": False,
             "conversation_id": active_conversation.conversation_id
@@ -354,3 +367,13 @@ class ChatService:
                 return value
         except (ValueError, TypeError):
             return None   
+
+    async def delete_conversation(self, user_id: str, conversation_id: str) -> dict:
+        """Delete a conversation"""
+        try:
+            # Delete the conversation from MongoDB
+            result = await self.mongo_client.delete_conversation(user_id, conversation_id)
+            return {"success": True, "deleted": result}
+        except Exception as e:
+            print(f"Error deleting conversation: {e}")
+            return {"success": False, "error": str(e)}
