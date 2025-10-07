@@ -57,7 +57,7 @@ class AuthService {
         return { success: false, error: 'Couldnt give you a user id by email.' };
       }
       const userID = await response2.json();
-      localStorage.setItem('currentUser', userID);
+      localStorage.setItem('currentUser', JSON.stringify(userID));
       
       return { success: true };
     } catch (error) {
@@ -137,6 +137,21 @@ class AuthService {
   getCurrentUserId() {
     const saved = localStorage.getItem('currentUser');
     return saved ? JSON.parse(saved) : null;
+  }
+
+  async getCurrentUser() {
+    const userId = this.getCurrentUserId();
+    if (!userId) return null;
+    
+    try {
+      const response = await fetch(`${this.baseURL}/users/${userId}`);
+      if (!response.ok) return null;
+      const userData = await response.json();
+      return userData;
+    } catch (error) {
+      console.error('Error getting current user:', error);
+      return null;
+    }
   }
 
   logout() {

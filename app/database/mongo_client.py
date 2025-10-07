@@ -121,6 +121,18 @@ class MongoDBClient:
             return user_profile.conversations
         return []
 
+    async def delete_conversation(self, user_id: str, conversation_id: str) -> bool:
+        """Delete a conversation"""
+        try:
+            result = await self.db.user_profiles.update_one(
+                {"user_id": user_id},
+                {"$pull": {"conversations": {"conversation_id": conversation_id}}}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"Error deleting conversation: {e}")
+            return False
+
     async def get_user_profile_by_email(self, email: str) -> Optional[UserProfile]:
         """Get user profile by email"""
         profile_dict = await self.db.user_profiles.find_one({"email": email})
