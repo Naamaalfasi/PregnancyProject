@@ -1,8 +1,9 @@
 import HomeLoggedIn from './HomeLoggedIn';
 import HomeLanding from './HomeLanding';
 import ChatBot from './ChatBot';
+import Profile from './Profile/Profile';
 
-function Home({ isLoggedIn, currentScreen }: { isLoggedIn: boolean; currentScreen: string }) {
+function Home({ isLoggedIn, currentScreen, onNavigate }: { isLoggedIn: boolean; currentScreen: string; onNavigate: (screen: string) => void }) {
   if (!isLoggedIn) {
     return <HomeLanding />;
   }
@@ -12,9 +13,11 @@ function Home({ isLoggedIn, currentScreen }: { isLoggedIn: boolean; currentScree
     case 'home':
       return <HomeLoggedIn />;
     case 'profile':
-      return <div>Profile Screen - Coming Soon</div>;
+      return <Profile onNavigate={onNavigate}/>;
     case 'tasks':
       return <div>Tasks Screen - Coming Soon</div>;
+    case 'documents':
+      return <div>Documents Screen - Coming Soon</div>;
     case 'chatbot':
       return <ChatBot />;
     default:

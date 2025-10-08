@@ -15,6 +15,7 @@ import {
   Chat 
 } from '@mui/icons-material';
 import HomeIcon from '@mui/icons-material/Home';
+import Description from '@mui/icons-material/Description';
 
 interface MenuProps {
   open: boolean;
@@ -28,6 +29,7 @@ function Menu({ open, onClose, onLogout, onNavigate }: MenuProps) {
     { text: 'Home', icon: <HomeIcon />, screen: 'home' },
     { text: 'Profile', icon: <Person />, screen: 'profile' },
     { text: 'Tasks', icon: <Assignment />, screen: 'tasks' },
+    { text: 'Documents', icon: <Description />, screen: 'documents' },
     { text: 'Chatbot', icon: <Chat />, screen: 'chatbot' },
     { text: 'Logout', icon: <ExitToApp />, screen: 'logout' },
   ];

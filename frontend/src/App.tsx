@@ -3,7 +3,6 @@ import { Box } from '@mui/material';
 import Header from './components/Header';
 import Home from './components/Home';
 import LoginForm from './components/LoginForm';
-import RegisterForm from './components/RegisterForm';
 import MultiStepRegistration from './components/Registration/MultiStepRegistration';
 import Menu from './components/Menu';
 import { authService } from './services/authService';
@@ -17,7 +16,6 @@ function App() {
   const [currentScreen, setCurrentScreen] = useState('home');
 
   useEffect(() => {
-    // Check if user is already logged in
     checkIfLoggedIn();
   }, []);
 
@@ -95,7 +93,7 @@ function App() {
           onBackToHome={handleBackToHome}
         />
       ) : (
-        <Home isLoggedIn={isLoggedIn} currentScreen={currentScreen} />
+        <Home isLoggedIn={isLoggedIn} currentScreen={currentScreen} onNavigate={handleNavigate} />
       )}
     </Box>
   );
