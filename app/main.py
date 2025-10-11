@@ -180,31 +180,50 @@ async def get_user_documents(user_id: str):
 
 # Tasks Endpoints
 
-@app.post("/users/{user_id}/tasks/standard")
-async def create_standard_tasks(user_id: str):
+@app.post("/tasks/standard")
+async def create_standard_tasks(user_id: str = Body()):
+    print(f"Creating standard tasks for user: {user_id}")
+    
     user = await mongo_client.get_user_profile(user_id)
     if not user:
+        print(f"User {user_id} not found")
         raise HTTPException(status_code=404, detail="User profile not found")
+    
+    print(f"User found: {user.user_id}")
+    
     tasks = await task_manager.create_standard_tasks_for_user(user.user_id)
+    print(f"Created {len(tasks)} tasks from task_manager")
+    
     tasks_dicts = [t.dict() for t in tasks]
-    await mongo_client.update_user_tasks(user.user_id, tasks_dicts)
+    print(f"Converted to {len(tasks_dicts)} task dicts")
+    
+    success = await mongo_client.update_user_tasks(user.user_id, tasks_dicts)
+    print(f"Update result: {success}")
+    
+    if not success:
+        print("Failed to save tasks to database")
+        raise HTTPException(status_code=500, detail="Failed to save tasks to database")
+    
     return {"message": "Standard tasks created", "tasks": tasks_dicts}
     
-@app.post("/users/{user_id}/tasks", response_model=Task)
-async def create_task(user_id: str, task_data: TaskCreate):
-    """
-    Create Task
-    If a similar task already exists, return an error
-    """
+@app.post("/tasks", response_model=Task)
+async def create_task(user_id: str = Body(), task_data: TaskCreate = Body()):
     tasks: List[Task] = await mongo_client.get_user_tasks(user_id)
+
+    # נורמליזציה: אם לא הגיעו start/end אבל יש pregnancy_week – נמפה
+    start_week = task_data.start_week if task_data.start_week is not None else task_data.pregnancy_week
+    end_week = task_data.end_week if task_data.end_week is not None else task_data.pregnancy_week
+
     for t in tasks:
+        # Backward-compat for existing tasks:
+        t_start = getattr(t, "start_week", None) or getattr(t, "pregnancy_week", None)
         if (
             t.title == task_data.title and
             t.task_type == task_data.task_type and
-            t.pregnancy_week == task_data.pregnancy_week
+            t_start == start_week
         ):
-            raise HTTPException(status_code=409, detail="Task already exists for this user in this week")
-    # יצירת מטלה חדשה
+            raise HTTPException(status_code=409, detail="Task already exists for this user in this start week")
+
     task = Task(
         task_id=str(uuid.uuid4()),
         user_id=user_id,
@@ -212,12 +231,11 @@ async def create_task(user_id: str, task_data: TaskCreate):
         description=task_data.description,
         task_type=task_data.task_type,
         priority=task_data.priority,
-        pregnancy_week=task_data.pregnancy_week,
-        due_date=task_data.due_date,
+        start_week=start_week,
+        end_week=end_week,
         source=task_data.source,
         reason=task_data.reason,
         related_links=task_data.related_links,
-        # שדות נוספים כמו created_at, completed וכו' יתווספו אוטומטית ע"י המודל
     )
     await mongo_client.create_task(user_id, task)
     return task

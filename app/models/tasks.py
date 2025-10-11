@@ -41,9 +41,9 @@ class Task(BaseModel):
     task_type: TaskType
     priority: TaskPriority = TaskPriority.MEDIUM
     status: TaskStatus = TaskStatus.PENDING
-    due_date: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    pregnancy_week: Optional[int] = None
+    start_week: Optional[int] = None
+    end_week: Optional[int] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     source: TaskSource = TaskSource.AGENT
     reason: TaskReason = TaskReason.STANDARD_SCHEDULE
@@ -55,8 +55,8 @@ class TaskCreate(BaseModel):
     description: Optional[str] = None
     task_type: TaskType
     priority: TaskPriority = TaskPriority.MEDIUM
-    pregnancy_week: Optional[int] = None
-    due_date: Optional[datetime] = None
+    start_week: Optional[int] = None
+    end_week: Optional[int] = None
     source: TaskSource = TaskSource.USER
     reason: TaskReason = TaskReason.OTHER
     related_links: Optional[List[str]] = None
@@ -66,10 +66,11 @@ class TaskUpdate(BaseModel):
     description: Optional[str] = None
     task_type: Optional[str] = None
     priority: Optional[str] = None
-    pregnancy_week: Optional[int] = None
-    due_date: Optional[datetime] = None
+    start_week: Optional[int] = None
+    end_week: Optional[int] = None
     source: Optional[str] = None
     reason: Optional[str] = None
     related_links: Optional[List[str]] = None
     notes: Optional[str] = None
-    # אפשר להוסיף עוד שדות אם צריך
+    status: Optional[TaskStatus] = None
+    completed_at: Optional[datetime] = None
