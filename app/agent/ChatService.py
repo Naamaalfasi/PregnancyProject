@@ -160,11 +160,8 @@ class ChatService:
         )
 
         organic_prompt = f"""
-        {language_instruction}
 
         ANSWER THE USER'S QUESTION BASED ON THE USER'S PROFILE AND THE CONVERSATION HISTORY.
-        Keep tone empathetic and clear, suitable for a pregnancy assistant.
-        If you list steps or tips, use short bullet points.
         Avoid hallucinations; if unsure, say what info is needed.
         
         USER PROFILE: {filtered_user}
