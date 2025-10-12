@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import {
   Box,
   Paper,
@@ -7,7 +8,6 @@ import {
   Typography,
   List,
   ListItem,
-  ListItemText,
   Avatar,
   Divider,
   IconButton,
@@ -19,6 +19,7 @@ import {
   CircularProgress,
   ListItemButton,
   ListItemIcon,
+  ListItemText,
   Checkbox
 } from '@mui/material';
 import {
@@ -41,6 +42,57 @@ interface Conversation {
   created_at: string;
 }
 import { authService } from '../services/authService';
+
+// Custom styled markdown component
+const StyledMarkdown = ({ children }: { children: string }) => {
+  return (
+    <ReactMarkdown
+      components={{
+        // Style paragraphs
+        p: ({ children }) => (
+          <Typography component="span" variant="body1" sx={{ display: 'block', mb: 1, lineHeight: 1.6 }}>
+            {children}
+          </Typography>
+        ),
+        // Style strong/bold text
+        strong: ({ children }) => (
+          <strong style={{ fontWeight: 600 }}>{children}</strong>
+        ),
+        // Style emphasis/italic text
+        em: ({ children }) => (
+          <em style={{ fontStyle: 'italic' }}>{children}</em>
+        ),
+        // Style lists
+        ul: ({ children }) => (
+          <ul style={{ marginLeft: '20px', marginBottom: '8px' }}>
+            {children}
+          </ul>
+        ),
+        ol: ({ children }) => (
+          <ol style={{ marginLeft: '20px', marginBottom: '8px' }}>
+            {children}
+          </ol>
+        ),
+        li: ({ children }) => (
+          <li style={{ marginBottom: '4px' }}>{children}</li>
+        ),
+        // Style code
+        code: ({ children }) => (
+          <code style={{ 
+            backgroundColor: 'rgba(255,255,255,0.2)', 
+            padding: '2px 6px', 
+            borderRadius: '4px',
+            fontFamily: 'monospace'
+          }}>
+            {children}
+          </code>
+        ),
+      }}
+    >
+      {children}
+    </ReactMarkdown>
+  );
+};
 
 interface ChatBotProps {}
 
@@ -315,14 +367,12 @@ const ChatBot: React.FC<ChatBotProps> = () => {
                         borderRadius: message.isUser ? '20px 20px 5px 20px' : '20px 20px 20px 5px'
                       }}
                     >
-                      <ListItemText 
-                        primary={message.message}
-                        secondary={
-                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                            {new Date(message.timestamp).toLocaleTimeString()}
-                          </Typography>
-                        }
-                      />
+                      <Box sx={{ color: 'white' }}>
+                        <StyledMarkdown>{message.message}</StyledMarkdown>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block', mt: 1 }}>
+                          {new Date(message.timestamp).toLocaleTimeString()}
+                        </Typography>
+                      </Box>
                     </Paper>
                   </Box>
                 </ListItem>
