@@ -498,3 +498,15 @@ class MongoDBClient:
                 
         except Exception as e:
             return f"Error deleting user {user_id}: {str(e)}"
+
+    async def remove_medical_document(self, user_id: str, document_id: str) -> bool:
+        """Remove a medical document from user profile"""
+        try:
+            result = await self.db.user_profiles.update_one(
+                {"user_id": user_id},
+                {"$pull": {"medical_documents": {"document_id": document_id}}}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"Error removing medical document: {e}")
+            return False

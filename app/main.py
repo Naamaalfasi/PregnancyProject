@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, APIRouter, Body
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional, Dict, Any
 import uuid
@@ -178,6 +179,36 @@ async def get_user_documents(user_id: str):
     return documents
 
 
+@app.get("/users/{user_id}/documents/{document_id}/file")
+async def get_document_file(user_id: str, document_id: str):
+    """Get the original document file"""
+    # Get user profile to find the document
+    user = await mongo_client.get_user_profile(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User profile not found")
+    
+    # Find the document
+    document = None
+    for doc in user.medical_documents:
+        if doc.document_id == document_id:
+            document = doc
+            break
+    
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Check if file exists
+    if not os.path.exists(document.file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    # Return the file
+    return FileResponse(
+        path=document.file_path,
+        filename=document.file_name,
+        media_type='application/octet-stream'
+    )
+
+
 # Tasks Endpoints
 
 @app.post("/users/{user_id}/tasks/standard")
@@ -264,7 +295,7 @@ async def delete_document(user_id: str, document_id: str):
         raise HTTPException(status_code=404, detail="Document not found")
     
     # Delete the file from file system
-    file_deleted = file_storage.delete_file(document_to_delete.file_path)
+    file_deleted = await file_storage.delete_file(document_to_delete.file_path)
     
     # Remove document from user profile
     document_removed = await mongo_client.remove_medical_document(user_id, document_id)

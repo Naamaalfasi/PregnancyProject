@@ -2,6 +2,7 @@ import HomeLoggedIn from './HomeLoggedIn';
 import HomeLanding from './HomeLanding';
 import ChatBot from './ChatBot';
 import Profile from './Profile/Profile';
+import Documents from './Documents';
 
 function Home({ isLoggedIn, currentScreen, onNavigate }: { isLoggedIn: boolean; currentScreen: string; onNavigate: (screen: string) => void }) {
   if (!isLoggedIn) {
@@ -17,7 +18,7 @@ function Home({ isLoggedIn, currentScreen, onNavigate }: { isLoggedIn: boolean; 
     case 'tasks':
       return <div>Tasks Screen - Coming Soon</div>;
     case 'documents':
-      return <div>Documents Screen - Coming Soon</div>;
+      return <Documents />;
     case 'chatbot':
       return <ChatBot />;
     default:
