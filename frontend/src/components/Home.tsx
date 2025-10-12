@@ -1,5 +1,9 @@
 import HomeLoggedIn from './HomeLoggedIn';
 import HomeLanding from './HomeLanding';
+import Tasks from './Tasks';
+import Profile from './Profile/Profile';
+import Documents from './Documents';
+import ChatBot from './ChatBot';
 
 function Home({ isLoggedIn, currentScreen, onNavigate }: { isLoggedIn: boolean; currentScreen: string; onNavigate: (screen: string) => void }) {
   if (!isLoggedIn) {
