@@ -85,21 +85,25 @@ class TaskManager:
             for recurring in item.get("recurring", []):
                 start_week = recurring["start_week"]
                 end_week = recurring.get("end_week", start_week)
-                notes = item.get("notes", "")
-                task = Task(
-                    task_id=str(uuid.uuid4()),
-                    user_id=user_id,
-                    title=item["title"],
-                    description=item.get("description"),
-                    task_type=TaskType(item["task_type"]),
-                    priority=TaskPriority(item["priority"]),
-                    start_week=start_week,
-                    end_week=end_week,
-                    source=TaskSource.AGENT,
-                    reason=TaskReason.STANDARD_SCHEDULE,
-                    notes=notes
-                )
-                tasks.append(task)
+                # צור מטלה אם current_week <= end_week (כלומר, עדיין רלוונטית)
+                if current_week <= end_week:
+                    due_date = None  # אפשר לחשב לפי lmp_date אם צריך
+                    notes = item.get("notes", "")
+                    task = Task(
+                        task_id=str(uuid.uuid4()),
+                        user_id=user_id,
+                        title=item["title"],
+                        description=item.get("description"),
+                        task_type=TaskType(item["task_type"]),
+                        priority=TaskPriority(item["priority"]),
+                        start_week=start_week,
+                        end_week=end_week,
+                        due_date=due_date,
+                        source=TaskSource.AGENT,
+                        reason=TaskReason.STANDARD_SCHEDULE,
+                        related_links=None,
+                    )
+                    tasks.append(task)
         return tasks
 
     def update_or_create_task(self, tasks, user_id, title, description, task_type, priority, start_week, end_week, source, reason, notes):

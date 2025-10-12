@@ -21,6 +21,7 @@ interface TaskFiltersProps {
   currentPregnancyWeek?: number;
   onFiltersChange: (filters: FilterOptions) => void;
   tasks: Task[];
+  filteredTasks: Task[]; // הוסף את זה
 }
 
 export default function TaskFilters({
@@ -44,20 +45,31 @@ export default function TaskFilters({
     onFiltersChange(newFilters);
   };
 
-  // סטטיסטיקות
+  // סטטיסטיקות - משתמש במטלות המקוריות, לא המסוננות
   const upcomingCount = tasks.filter((task) => {
+    // רק מטלות שלא הושלמו
+    if (task.status === "completed") return false;
+
     if (!currentPregnancyWeek) return false;
     const startWeek = task.start_week ?? task.pregnancy_week;
-    return (
-      startWeek &&
+    const endWeek = task.end_week ?? task.pregnancy_week ?? startWeek;
+
+    if (!startWeek) return false;
+
+    const isInTaskRange =
+      currentPregnancyWeek >= startWeek && currentPregnancyWeek <= endWeek;
+    const isInUpcomingRange =
       startWeek >= currentPregnancyWeek &&
-      startWeek <= currentPregnancyWeek + 5
-    );
+      startWeek <= currentPregnancyWeek + 5;
+
+    return isInTaskRange || isInUpcomingRange;
   }).length;
 
   const pendingCount = tasks.filter(
     (task) => task.status !== "completed"
   ).length;
+
+  const allCount = tasks.length;
 
   return (
     <Box sx={{ mb: 3, direction: "rtl" }}>
@@ -76,7 +88,7 @@ export default function TaskFilters({
           >
             <MenuItem value="upcoming">בחודש הקרוב ({upcomingCount})</MenuItem>
             <MenuItem value="pending">שטרם בוצעו ({pendingCount})</MenuItem>
-            <MenuItem value="all">הכל</MenuItem>
+            <MenuItem value="all">הכל ({allCount})</MenuItem>
           </Select>
         </FormControl>
 
@@ -120,7 +132,12 @@ export default function TaskFilters({
       </Stack>
 
       {/* תצוגת פילטרים פעילים */}
-      <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: "wrap" }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ mt: 2, flexWrap: "wrap" }}
+        useFlexGap
+      >
         {filters.priority && (
           <Chip
             label={`עדיפות: ${filters.priority}`}

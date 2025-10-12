@@ -35,6 +35,9 @@ export default function CompleteTaskDialog({
     }
   }, [open, initialDate]);
 
+  // קבל את התאריך הנוכחי בפורמט yyyy-mm-dd
+  const today = new Date().toISOString().split("T")[0];
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle>mark task as completed</DialogTitle>
@@ -46,6 +49,7 @@ export default function CompleteTaskDialog({
             InputLabelProps={{ shrink: true }}
             value={date}
             onChange={(e) => setDate(e.target.value)}
+            inputProps={{ max: today }} // חסום תאריכים עתידיים
           />
         </Stack>
       </DialogContent>

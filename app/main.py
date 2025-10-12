@@ -191,20 +191,47 @@ async def create_standard_tasks(user_id: str = Body()):
     
     print(f"User found: {user.user_id}")
     
-    tasks = await task_manager.create_standard_tasks_for_user(user.user_id)
-    print(f"Created {len(tasks)} tasks from task_manager")
+    # קבל מטלות קיימות
+    existing_tasks = await mongo_client.get_user_tasks(user.user_id)
+    print(f"Found {len(existing_tasks)} existing tasks")
     
-    tasks_dicts = [t.dict() for t in tasks]
-    print(f"Converted to {len(tasks_dicts)} task dicts")
+    # צור מטלות סטנדרטיות חדשות
+    new_standard_tasks = await task_manager.create_standard_tasks_for_user(user.user_id)
+    print(f"Generated {len(new_standard_tasks)} standard tasks")
     
-    success = await mongo_client.update_user_tasks(user.user_id, tasks_dicts)
-    print(f"Update result: {success}")
+    # בדוק אילו מטלות סטנדרטיות חסרות
+    tasks_to_add = []
+    for new_task in new_standard_tasks:
+        # בדוק אם כבר קיימת מטלה עם אותו שם וטווח שבועות
+        exists = False
+        for existing_task in existing_tasks:
+            if (existing_task.title == new_task.title and 
+                existing_task.start_week == new_task.start_week and
+                existing_task.end_week == new_task.end_week):
+                exists = True
+                break
+        
+        if not exists:
+            tasks_to_add.append(new_task)
     
-    if not success:
-        print("Failed to save tasks to database")
-        raise HTTPException(status_code=500, detail="Failed to save tasks to database")
+    print(f"Adding {len(tasks_to_add)} new standard tasks")
     
-    return {"message": "Standard tasks created", "tasks": tasks_dicts}
+    if tasks_to_add:
+        # הוסף רק את המטלות החדשות
+        for task in tasks_to_add:
+            await mongo_client.create_task(user.user_id, task)
+        
+        return {
+            "message": f"Added {len(tasks_to_add)} new standard tasks", 
+            "added_tasks": [t.dict() for t in tasks_to_add],
+            "total_existing": len(existing_tasks)
+        }
+    else:
+        return {
+            "message": "All standard tasks already exist", 
+            "added_tasks": [],
+            "total_existing": len(existing_tasks)
+        }
     
 @app.post("/tasks", response_model=Task)
 async def create_task(user_id: str = Body(), task_data: TaskCreate = Body()):

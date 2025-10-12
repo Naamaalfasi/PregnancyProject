@@ -38,11 +38,19 @@ export default function TaskList({
       // סינון לפי טווח זמן
       if (filters.timeRange === "upcoming" && currentPregnancyWeek) {
         const startWeek = task.start_week ?? task.pregnancy_week;
-        if (
-          !startWeek ||
-          startWeek < currentPregnancyWeek ||
-          startWeek > currentPregnancyWeek + 5
-        ) {
+        const endWeek = task.end_week ?? task.pregnancy_week ?? startWeek;
+
+        if (!startWeek) return false;
+
+        // בדיקה אם השבוע הנוכחי חופף לטווח הביצוע של המטלה
+        // או שהמטלה צריכה להתבצע בטווח של 5 שבועות מהשבוע הנוכחי
+        const isInTaskRange =
+          currentPregnancyWeek >= startWeek && currentPregnancyWeek <= endWeek;
+        const isInUpcomingRange =
+          startWeek >= currentPregnancyWeek &&
+          startWeek <= currentPregnancyWeek + 5;
+
+        if (!isInTaskRange && !isInUpcomingRange) {
           return false;
         }
       } else if (filters.timeRange === "pending") {
@@ -69,6 +77,13 @@ export default function TaskList({
     (task) => task.status !== "completed"
   );
 
+  // מיון המטלות לפי start_week
+  const sortedPendingTasks = [...pendingTasks].sort((a, b) => {
+    const aWeek = a.start_week ?? a.pregnancy_week ?? 0;
+    const bWeek = b.start_week ?? b.pregnancy_week ?? 0;
+    return aWeek - bWeek;
+  });
+
   if (!tasks.length) {
     return (
       <Card>
@@ -90,6 +105,7 @@ export default function TaskList({
         currentPregnancyWeek={currentPregnancyWeek}
         onFiltersChange={setFilters}
         tasks={tasks}
+        filteredTasks={filteredTasks}
       />
 
       <Box
@@ -131,8 +147,8 @@ export default function TaskList({
               + Create Task
             </Box>
 
-            {pendingTasks.length > 0 ? (
-              pendingTasks.map((task) => (
+            {sortedPendingTasks.length > 0 ? (
+              sortedPendingTasks.map((task) => (
                 <TaskCard
                   key={task.task_id}
                   task={task}
