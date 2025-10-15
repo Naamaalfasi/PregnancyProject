@@ -1,5 +1,6 @@
-import HomeLoggedIn from './HomeLoggedIn';
-import HomeLanding from './HomeLanding';
+import HomeLoggedIn from "./HomeLoggedIn";
+import HomeLanding from "./HomeLanding";
+import Tasks from "./Tasks";
 import ChatBot from './ChatBot';
 import Profile from './Profile/Profile';
 import Documents from './Documents';
@@ -11,15 +12,15 @@ function Home({ isLoggedIn, currentScreen, onNavigate }: { isLoggedIn: boolean; 
 
   // For now, show placeholder components for other screens
   switch (currentScreen) {
-    case 'home':
+    case "home":
       return <HomeLoggedIn />;
-    case 'profile':
+    case "profile":
       return <Profile onNavigate={onNavigate}/>;
-    case 'tasks':
-      return <div>Tasks Screen - Coming Soon</div>;
+    case "tasks":
+      return <Tasks />;
     case 'documents':
       return <Documents />;
-    case 'chatbot':
+    case "chatbot":
       return <ChatBot />;
     default:
       return <HomeLanding />;

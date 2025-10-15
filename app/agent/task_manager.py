@@ -47,8 +47,8 @@ class TaskManager:
         description: str,
         task_type: TaskType,
         priority: TaskPriority,
-        pregnancy_week: int,
-        due_date: datetime,
+        start_week: int,
+        end_week: int,
         source: TaskSource = TaskSource.AGENT,
         reason: TaskReason = TaskReason.STANDARD_SCHEDULE,
         notes: str = "",
@@ -60,8 +60,8 @@ class TaskManager:
             description=description,
             task_type=task_type,
             priority=priority,
-            pregnancy_week=pregnancy_week,
-            due_date=due_date,
+            start_week=start_week,
+            end_week=end_week,
             source=source,
             reason=reason,
             related_links=None,
@@ -96,20 +96,21 @@ class TaskManager:
                         description=item.get("description"),
                         task_type=TaskType(item["task_type"]),
                         priority=TaskPriority(item["priority"]),
-                        pregnancy_week=start_week,
+                        start_week=start_week,
+                        end_week=end_week,
                         due_date=due_date,
                         source=TaskSource.AGENT,
                         reason=TaskReason.STANDARD_SCHEDULE,
-                        notes=notes
+                        related_links=None,
                     )
                     tasks.append(task)
         return tasks
 
-    def update_or_create_task(self, tasks, user_id, title, description, task_type, priority, pregnancy_week, due_date, source, reason, notes):
+    def update_or_create_task(self, tasks, user_id, title, description, task_type, priority, start_week, end_week, source, reason, notes):
         existing_task = TaskManager.find_existing_task(tasks, user_id, task_type, title)
         if existing_task:
-            existing_task.pregnancy_week = pregnancy_week
-            existing_task.due_date = due_date
+            existing_task.start_week = start_week
+            existing_task.end_week = end_week
             existing_task.reason = reason
             existing_task.notes = notes
             # אפשר להוסיף לוגיקה לשמירת היסטוריית שינויים
@@ -121,8 +122,8 @@ class TaskManager:
                 description=description,
                 task_type=task_type,
                 priority=priority,
-                pregnancy_week=pregnancy_week,
-                due_date=due_date,
+                start_week=start_week,
+                end_week=end_week,
                 source=source,
                 reason=reason,
                 notes=notes
