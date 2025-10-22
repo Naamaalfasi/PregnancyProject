@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import {
   Box,
   Paper,
@@ -198,6 +199,56 @@ const Documents: React.FC = () => {
   };
 
 
+  const StyledMarkdown = ({ children }: { children: string }) => {
+    return (
+      <ReactMarkdown
+        components={{
+          // Style paragraphs
+          p: ({ children }) => (
+            <Typography component="span" variant="body2" sx={{ display: 'block', mb: 1, lineHeight: 1.6 }}>
+              {children}
+            </Typography>
+          ),
+          // Style strong/bold text
+          strong: ({ children }) => (
+            <strong style={{ fontWeight: 600 }}>{children}</strong>
+          ),
+          // Style emphasis/italic text
+          em: ({ children }) => (
+            <em style={{ fontStyle: 'italic' }}>{children}</em>
+          ),
+          // Style lists
+          ul: ({ children }) => (
+            <ul style={{ marginLeft: '20px', marginBottom: '8px' }}>
+              {children}
+            </ul>
+          ),
+          ol: ({ children }) => (
+            <ol style={{ marginLeft: '20px', marginBottom: '8px' }}>
+              {children}
+            </ol>
+          ),
+          li: ({ children }) => (
+            <li style={{ marginBottom: '4px' }}>{children}</li>
+          ),
+          // Style code
+          code: ({ children }) => (
+            <code style={{ 
+              backgroundColor: 'rgba(0,0,0,0.1)', 
+              padding: '2px 6px', 
+              borderRadius: '4px',
+              fontFamily: 'monospace'
+            }}>
+              {children}
+            </code>
+          ),
+        }}
+      >
+        {children}
+      </ReactMarkdown>
+    );
+  };
+
   const getDocumentTypeColor = (type: string) => {
     const colors: Record<string, string> = {
       blood_test: '#e91e63',
@@ -266,7 +317,7 @@ const Documents: React.FC = () => {
             maxHeight: '200px',
             overflow: 'auto'
           }}>
-            {uploadedDocumentSummary}
+            <StyledMarkdown>{uploadedDocumentSummary}</StyledMarkdown>
           </Typography>
         </Paper>
       )}

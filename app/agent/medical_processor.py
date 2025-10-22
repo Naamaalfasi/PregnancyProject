@@ -41,19 +41,20 @@ class MedicalDataProcessor:
 
     async def generate_summary(self, text: str) -> str:
         """
-        Generate a comprehensive summary of the medical document using Gemini
-        Returns a dictionary with different aspects of the summary
+        Generates a summary of the medical document using Gemini
         """
         prompt = """
-        Given the following blood test results, summarize it in a structured format.
-        desired output:
-        - Test Type (blood_test, ultrasound, etc..)
-        - Test Date
-        - Abnormal Values (if any)
-        - Possible Concerns (if any)
-        - Recommendations (if any)
-        - is mother in risk of immidiate danger? (yes/no only)
-        - is fetus in risk of immidiate danger? (yes/no only) 
+        Generate a summary of the medical document.
+
+        The summary should be in a clear and concise format, and should be easy to understand.
+
+        The summary should match the language of most of the text, if u recognise that the receipient know a different language, use that language.
+
+        Limit your answer to the certain fields:
+        Summary: [summary of the medical document]
+        Test Type: [blood_test, ultrasound, etc..]
+        Test Date: [DD/MM/YYYY]
+        Medical conclusion: [medical conclusion of the document]
 
         And the text is: {text}
         """

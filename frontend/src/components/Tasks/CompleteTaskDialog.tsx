@@ -26,11 +26,11 @@ export default function CompleteTaskDialog({
     if (open) {
       if (initialDate) setDate(initialDate);
       else {
-        const d = new Date();
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, "0");
-        const dd = String(d.getDate()).padStart(2, "0");
-        setDate(`${dd}-${mm}-${yyyy}`);
+        const today = new Date();
+        const day = String(today.getDate()).padStart(2, '0');
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const year = today.getFullYear();
+        setDate(`${day}-${month}-${year}`);
       }
     }
   }, [open, initialDate]);

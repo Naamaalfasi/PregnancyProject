@@ -61,7 +61,7 @@ class AuthService {
 
       // Auto-login after successful registration
       const response2 = await fetch(
-        `${this.baseURL}/users/email/${userProfile.email}`,
+        `${this.baseURL}/users/email/${userProfile.email.toLowerCase()}`,
         {
           method: "GET",
           headers: { "Content-Type": "application/json" },
