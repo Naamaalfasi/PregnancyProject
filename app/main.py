@@ -375,6 +375,11 @@ async def switch_to_conversation(user_id: str, conversation_id: str):
 async def delete_conversation(user_id: str, conversation_id: str):
     return await chat_service.delete_conversation(user_id, conversation_id)
 
+@app.post("/chat/get-active-conversation")
+async def get_active_conversation(user_id: str):
+    """Get the current active conversation for the user"""
+    return await chat_service.get_active_conversation_details(user_id)
+
 # Pregnancy Timeline Endpoints
 @app.get("/users/{user_id}/timeline")
 async def get_pregnancy_timeline(user_id: str):

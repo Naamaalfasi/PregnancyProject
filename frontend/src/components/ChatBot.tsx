@@ -109,16 +109,43 @@ const ChatBot: React.FC<ChatBotProps> = () => {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const loadActiveConversation = async (userId: string) => {
+    try {
+      const activeConversation = await chatService.getActiveConversation(userId);
+      if (activeConversation) {
+        const conversationId = activeConversation.conversation_id || activeConversation.id;
+        setCurrentConversationId(conversationId || null);
+        
+        // Convert API messages to ChatMessage format
+        const apiMessages = activeConversation.messages || [];
+        const chatMessages: ChatMessage[] = apiMessages
+          .filter((msg: any) => msg.role !== 'system') // Filter out system messages
+          .map((msg: any) => ({
+            id: msg.message_id || Date.now().toString(),
+            message: msg.content || '',
+            timestamp: msg.timestamp || new Date().toISOString(),
+            isUser: msg.role === 'user'
+          }));
+        
+        setMessages(chatMessages);
+      }
+    } catch (error) {
+      console.error('Error loading active conversation:', error);
+      // Don't show error to user, just start with empty chat
+    }
+  };
+
   useEffect(() => {
-    // Get current user ID
     const getCurrentUser = async () => {
       try {
         const user = await authService.getCurrentUser();
         if (user) {
-          // The getCurrentUser() returns the user object directly, not wrapped in user_id
           const userId = user.user_id || user;
           setUserId(userId);
           await loadConversations(userId);
+          
+          // טעני את השיחה הפעילה מהשרת
+          await loadActiveConversation(userId);
         } else {
           setError('Please log in to use the chatbot. Click the login button in the header.');
         }

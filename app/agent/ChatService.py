@@ -374,3 +374,8 @@ class ChatService:
         except Exception as e:
             print(f"Error deleting conversation: {e}")
             return {"success": False, "error": str(e)}
+
+    async def get_active_conversation_details(self, user_id: str) -> Optional[Conversation]:
+        """Get the active conversation with full details"""
+        active_conversation = await self.mongo_client.get_active_conversation(user_id)
+        return active_conversation

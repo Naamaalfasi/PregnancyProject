@@ -136,6 +136,31 @@ class ChatService {
       throw error;
     }
   }
+
+  async getActiveConversation(userId: string): Promise<Conversation | null> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/chat/get-active-conversation?user_id=${userId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        // If no active conversation, return null (not an error)
+        if (response.status === 404) {
+          return null;
+        }
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error getting active conversation:', error);
+      return null;
+    }
+  }
 }
 
 export const chatService = new ChatService();
