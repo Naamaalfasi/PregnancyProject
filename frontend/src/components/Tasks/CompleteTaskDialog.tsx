@@ -30,12 +30,11 @@ export default function CompleteTaskDialog({
         const day = String(today.getDate()).padStart(2, '0');
         const month = String(today.getMonth() + 1).padStart(2, '0');
         const year = today.getFullYear();
-        setDate(`${day}-${month}-${year}`);
+        setDate(`${year}-${month}-${day}`);
       }
     }
   }, [open, initialDate]);
 
-  // קבל את התאריך הנוכחי בפורמט yyyy-mm-dd
   const today = new Date().toISOString().split("T")[0];
 
   return (
@@ -49,7 +48,7 @@ export default function CompleteTaskDialog({
             InputLabelProps={{ shrink: true }}
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            inputProps={{ max: today }} // חסום תאריכים עתידיים
+            inputProps={{ max: today }}
           />
         </Stack>
       </DialogContent>
