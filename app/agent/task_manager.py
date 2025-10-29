@@ -25,6 +25,12 @@ class TaskManager:
             user_value = getattr(user_profile, field, None)
             if user_value is None and isinstance(user_profile, dict):
                 user_value = user_profile.get(field, None)
+
+            # אם השדה לא קיים, דלג על התנאי (או החזר True)
+            if user_value is None:
+                print(f"Field {field} not found in user profile, skipping condition")
+                continue
+
             if operator == "equals" and user_value != value:
                 return False
             if operator == "not_equals" and user_value == value:
@@ -85,25 +91,24 @@ class TaskManager:
             for recurring in item.get("recurring", []):
                 start_week = recurring["start_week"]
                 end_week = recurring.get("end_week", start_week)
-                # צור מטלה אם current_week <= end_week (כלומר, עדיין רלוונטית)
-                if current_week <= end_week:
-                    due_date = None  # אפשר לחשב לפי lmp_date אם צריך
-                    notes = item.get("notes", "")
-                    task = Task(
-                        task_id=str(uuid.uuid4()),
-                        user_id=user_id,
-                        title=item["title"],
-                        description=item.get("description"),
-                        task_type=TaskType(item["task_type"]),
-                        priority=TaskPriority(item["priority"]),
-                        start_week=start_week,
-                        end_week=end_week,
-                        due_date=due_date,
-                        source=TaskSource.AGENT,
-                        reason=TaskReason.STANDARD_SCHEDULE,
-                        related_links=None,
-                    )
-                    tasks.append(task)
+                # צור את כל המטלות ללא הגבלת שבוע
+                due_date = None  # אפשר לחשב לפי lmp_date אם צריך
+                notes = item.get("notes", "")
+                task = Task(
+                    task_id=str(uuid.uuid4()),
+                    user_id=user_id,
+                    title=item["title"],
+                    description=item.get("description"),
+                    task_type=TaskType(item["task_type"]),
+                    priority=TaskPriority(item["priority"]),
+                    start_week=start_week,
+                    end_week=end_week,
+                    due_date=due_date,
+                    source=TaskSource.AGENT,
+                    reason=TaskReason.STANDARD_SCHEDULE,
+                    related_links=None,
+                )
+                tasks.append(task)
         return tasks
 
     def update_or_create_task(self, tasks, user_id, title, description, task_type, priority, start_week, end_week, source, reason, notes):

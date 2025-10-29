@@ -236,17 +236,20 @@ async def create_standard_tasks(user_id: str = Body()):
         # בדוק אם כבר קיימת מטלה עם אותו שם וטווח שבועות
         exists = False
         for existing_task in existing_tasks:
+            # השוואה מדויקת - רק אם כל השדות זהים
             if (existing_task.title == new_task.title and 
                 existing_task.start_week == new_task.start_week and
                 existing_task.end_week == new_task.end_week):
                 exists = True
+                print(f"Task already exists: {new_task.title} (Week {new_task.start_week}-{new_task.end_week})")
                 break
         
         if not exists:
             tasks_to_add.append(new_task)
-    
+            print(f"Adding new task: {new_task.title} (Week {new_task.start_week}-{new_task.end_week})")
+
     print(f"Adding {len(tasks_to_add)} new standard tasks")
-    
+
     if tasks_to_add:
         # הוסף רק את המטלות החדשות
         for task in tasks_to_add:
@@ -259,7 +262,7 @@ async def create_standard_tasks(user_id: str = Body()):
         }
     else:
         return {
-            "message": "All standard tasks already exist", 
+            "message": "All standard tasks already exist - no new tasks to add", 
             "added_tasks": [],
             "total_existing": len(existing_tasks)
         }
