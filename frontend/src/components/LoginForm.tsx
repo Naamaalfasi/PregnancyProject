@@ -72,7 +72,7 @@ function LoginForm({ onLoginSuccess, onBackToRegister, onBackToHome }: LoginForm
             fullWidth
             label="Email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value.toLowerCase())}
             margin="normal"
             variant="outlined"
             InputProps={{
