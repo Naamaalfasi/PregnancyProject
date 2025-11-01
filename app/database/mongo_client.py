@@ -9,6 +9,8 @@ from app.models.chat import Conversation, ChatMessage
 from app.database.data_processing import PregnancyDataProcessor
 from app.database.file_processing import DocumentStatus
 from app.utils.password_utils import hash_password, verify_password
+from pathlib import Path
+from app.utils.pdf_processor import PDFProcessor
 from fastapi import HTTPException
 
 class MongoDBClient:
@@ -499,8 +501,8 @@ class MongoDBClient:
         except Exception as e:
             return f"Error deleting user {user_id}: {str(e)}"
 
-    async def remove_medical_document(self, user_id: str, document_id: str) -> bool:
         """Remove a medical document from user profile"""
+    async def remove_medical_document(self, user_id: str, document_id: str) -> bool:
         try:
             result = await self.db.user_profiles.update_one(
                 {"user_id": user_id},
@@ -510,3 +512,38 @@ class MongoDBClient:
         except Exception as e:
             print(f"Error removing medical document: {e}")
             return False
+
+    async def get_user_documents_text(self, user_id: str) -> str:
+        """Extract text from all PDF documents in user's Uploads folder"""
+        
+        
+        pdf_processor = PDFProcessor()
+        user_documents_dir = Path("Uploads") / user_id / "Documents"
+        
+        if not user_documents_dir.exists():
+            return ""
+        
+        all_text = []
+        
+        # Find all PDF files in the user's Documents folder
+        pdf_files = list(user_documents_dir.glob("*.pdf"))
+        
+        for pdf_file in pdf_files:
+            try:
+                # Read PDF file as bytes
+                with open(pdf_file, "rb") as f:
+                    pdf_bytes = f.read()
+                
+                # Extract text from PDF
+                extracted_text = pdf_processor.extract_text_from_pdf(pdf_bytes)
+                
+                # Add filename and extracted text
+                all_text.append(f"--- Document: {pdf_file.name} ---\n{extracted_text}\n")
+                
+            except Exception as e:
+                print(f"Error extracting text from {pdf_file.name}: {e}")
+                # Continue with other files even if one fails
+                continue
+        
+        # Combine all document texts
+        return "\n".join(all_text) if all_text else ""

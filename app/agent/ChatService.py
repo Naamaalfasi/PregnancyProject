@@ -147,17 +147,9 @@ class ChatService:
             print(f"Profile analysis error: {e}")
             return "NO_UPDATE"
 
-    async def generate_organic_response(self, user: UserProfile, user_message: str, context: str, profile_updates_applied: List[dict]) -> str:
+    async def generate_organic_response(self, user: UserProfile, user_message: str, context: str, profile_updates_applied: List[dict], user_documents_text: str) -> str:
         """AI 2: Generate organic response based on user profile"""
         filtered_user = user.dict(exclude={'conversations'})
-
-        # Detect if the user message is in Hebrew (basic heuristic: presence of Hebrew unicode range)
-        is_hebrew = any('\u0590' <= ch <= '\u05FF' for ch in user_message)
-        language_instruction = (
-            "IMPORTANT: Respond in Hebrew (עברית תקנית), keep the entire answer in Hebrew."
-            if is_hebrew else
-            "IMPORTANT: Respond in the user's language."
-        )
 
         organic_prompt = f"""
 
@@ -168,10 +160,11 @@ class ChatService:
         CONVERSATION HISTORY: {context}
         USER MESSAGE: {user_message}
         PROFILE UPDATES APPLIED: {profile_updates_applied}
-        Provide a helpful, personalized response based on the user's profile and their question.
+        USER DOCUMENTS TEXT: {user_documents_text}
 
         Major guidelines:
-        - If they ask about medical documents, direct them to upload through the app.
+        - Provide a helpful, personalized response based on the user's profile and their question, match the language of the user.
+        - If they ask about medical documents, direct them to upload through the app. You do have access to them, if u dont see them - than there are none.
         - If profile updates were applied - Update the user, If not - do not mention it.
         - If question is not related to pregnancy, do not answer it.
         Your response:
@@ -198,6 +191,8 @@ class ChatService:
         
         # Check if we should archive after this exchange
         should_archive = await self.should_archive_conversation(active_conversation, message)
+
+        user_documents_text = await self.mongo_client.get_user_documents_text(user_id)
         
         # Add user message
         await self.add_message_to_conversation(
@@ -216,7 +211,7 @@ class ChatService:
             if profile_update_analysis and profile_update_analysis != "NO_UPDATE":
                 profile_updates_applied = await self.parse_and_execute_profile_updates(user_id, profile_update_analysis)
 
-            organic_response = await self.generate_organic_response(user, message, context, profile_updates_applied)
+            organic_response = await self.generate_organic_response(user, message, context, profile_updates_applied, user_documents_text)
 
         except Exception as e:
             organic_response = "I'm sorry, I couldn't process your message. Please try again."
@@ -374,8 +369,3 @@ class ChatService:
         except Exception as e:
             print(f"Error deleting conversation: {e}")
             return {"success": False, "error": str(e)}
-
-    async def get_active_conversation_details(self, user_id: str) -> Optional[Conversation]:
-        """Get the active conversation with full details"""
-        active_conversation = await self.mongo_client.get_active_conversation(user_id)
-        return active_conversation

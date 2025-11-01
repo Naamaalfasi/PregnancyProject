@@ -456,6 +456,11 @@ async def cleanup_test_data():
     return {"message": "Test data cleaned up successfully", "result": result}
 
 
+@app.post("/users/{user_id}/documents/text")
+async def get_user_documents_text(user_id: str):
+    """Get the text of all user documents"""
+    return await mongo_client.get_user_documents_text(user_id)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
