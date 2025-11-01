@@ -112,7 +112,7 @@ function HomeLoggedIn({ onNavigate }: HomeLoggedInProps) {
           paragraph
           sx={{ maxWidth: 820, mx: "auto", textAlign: "center" }}
         >
-          העוזרת החכמה שלך כאן כדי ללוות אותך ברוגע ובאהבה לאורך כל ההיריון.
+          כאן ללוות אותך לאורך כל הדרך.
         </Typography>
 
         {/* מידע שבועי על התפתחות העובר */}

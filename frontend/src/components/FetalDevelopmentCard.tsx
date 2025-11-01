@@ -1,12 +1,5 @@
 import { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  Typography,
-  Box,
-  Chip,
-  Divider,
-} from "@mui/material";
+import { Card, CardContent, Typography, Box, Divider } from "@mui/material";
 import { ChildCare } from "@mui/icons-material";
 
 interface FetalDevelopmentInfo {
@@ -117,32 +110,6 @@ function FetalDevelopmentCard({
             >
               {fetalInfo.title}
             </Typography>
-
-            {/* פס דקורטיבי קצר */}
-            <Box
-              sx={{
-                width: 64,
-                height: 4,
-                mx: "auto",
-                borderRadius: 2,
-                background:
-                  "linear-gradient(90deg, rgba(233,30,99,0.55), rgba(156,39,176,0.45))",
-              }}
-            />
-
-            {/* שבב שבוע עדין */}
-            <Chip
-              label={`שבוע ${fetalInfo.week}`}
-              size="small"
-              variant="outlined"
-              color="primary"
-              sx={{
-                mt: 1,
-                fontWeight: 500,
-                bgcolor: "rgba(233,30,99,0.06)",
-                borderColor: "rgba(233,30,99,0.25)",
-              }}
-            />
           </Box>
 
           {/* מרווח סימטרי לצד שמאל */}

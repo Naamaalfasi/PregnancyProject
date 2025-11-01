@@ -1,5 +1,12 @@
-import { AppBar, Toolbar, Typography, Button, Box, IconButton } from '@mui/material';
-import { Login, Menu as MenuIcon, PersonAdd } from '@mui/icons-material';
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  Button,
+  Box,
+  IconButton,
+} from "@mui/material";
+import { Login, Menu as MenuIcon, PersonAdd } from "@mui/icons-material";
 
 interface HeaderProps {
   isLoggedIn: boolean;
@@ -9,55 +16,73 @@ interface HeaderProps {
   onBackToHome: () => void;
 }
 
-function Header({ isLoggedIn, onLogin, onRegister, onMenuClick, onBackToHome }: HeaderProps) {
+function Header({
+  isLoggedIn,
+  onLogin,
+  onRegister,
+  onMenuClick,
+  onBackToHome,
+}: HeaderProps) {
   return (
-    <AppBar 
+    <AppBar
       position="static"
       sx={{
-        background: 'linear-gradient(45deg, #e91e63, #9c27b0)',
-        boxShadow: '0 4px 20px rgba(233, 30, 99, 0.3)',
+        background: "linear-gradient(45deg, #e91e63, #9c27b0)",
+        boxShadow: "0 4px 20px rgba(233, 30, 99, 0.3)",
+        position: "relative", // מאפשר absolute positioning יחסי ל-AppBar
       }}
     >
-      <Toolbar>
-        {/* Logo on the left */}
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Box 
-            component="img" 
-            src="/clearlogo.png" 
-            alt="Logo" 
-            sx={{ 
-              height: '80px',
-              width: 'auto',
-              margin: '10px'
-            }} 
-          />
-        </Box>
-        
-        {/* Title in the center */}
-        <Typography 
-          variant="h6" 
+      <Toolbar sx={{ minHeight: "100px !important" }}>
+        {" "}
+        {/* גובה מותאם ללוגו */}
+        {/* Title on the left */}
+        <Typography
+          variant="body1"
           component="div"
           onClick={onBackToHome}
-          sx={{ 
-            cursor: 'pointer',
-            flexGrow: 1,
-            textAlign: 'center',
+          sx={{
+            cursor: "pointer",
             fontWeight: 550,
-            fontSize: '1.5rem',
+            fontSize: "1.1rem",
+            mr: 2,
+            lineHeight: 1.5,
           }}
         >
           Pregnancy AI Assistant
         </Typography>
-        
+        {/* Logo in the center - ממורכז ביחס לעמוד כולו */}
+        <Box
+          sx={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            display: "flex",
+            alignItems: "center",
+            zIndex: 1,
+          }}
+        >
+          <Box
+            component="img"
+            src="/clearlogo.png"
+            alt="Logo"
+            onClick={onBackToHome}
+            sx={{
+              height: "80px",
+              width: "auto",
+              cursor: "pointer",
+            }}
+          />
+        </Box>
         {/* Buttons on the right */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, ml: "auto" }}>
           {isLoggedIn ? (
-            <IconButton 
-              color="inherit" 
+            <IconButton
+              color="inherit"
               onClick={onMenuClick}
               sx={{
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                "&:hover": {
+                  backgroundColor: "rgba(255, 255, 255, 0.1)",
                 },
               }}
             >
@@ -65,28 +90,28 @@ function Header({ isLoggedIn, onLogin, onRegister, onMenuClick, onBackToHome }: 
             </IconButton>
           ) : (
             <>
-              <Button 
-                color="inherit" 
+              <Button
+                color="inherit"
                 onClick={onRegister}
                 startIcon={<PersonAdd />}
                 sx={{
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  "&:hover": {
+                    backgroundColor: "rgba(255, 255, 255, 0.1)",
                   },
-                  fontWeight: 500
+                  fontWeight: 500,
                 }}
               >
                 Register
               </Button>
-              <Button 
-                color="inherit" 
+              <Button
+                color="inherit"
                 onClick={onLogin}
                 startIcon={<Login />}
                 sx={{
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  "&:hover": {
+                    backgroundColor: "rgba(255, 255, 255, 0.1)",
                   },
-                  fontWeight: 500
+                  fontWeight: 500,
                 }}
               >
                 Login
